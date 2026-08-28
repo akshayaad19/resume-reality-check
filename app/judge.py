@@ -135,6 +135,7 @@ def judge_all_skills(
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=BatchJudgment,
+                temperature=0,
             ),
         )
         batch = BatchJudgment.model_validate_json(response.text)

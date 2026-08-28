@@ -104,6 +104,7 @@ def extract_resume_claims_and_evidence(resume_text: str) -> ResumeExtraction:
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=ResumeExtraction,
+            temperature=0,
         ),
     )
     return ResumeExtraction.model_validate_json(response.text)
@@ -118,6 +119,7 @@ def extract_job_skills(job_description: str) -> JobSkills:
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=JobSkills,
+            temperature=0,
         ),
     )
     return JobSkills.model_validate_json(response.text)
