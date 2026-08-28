@@ -1,0 +1,46 @@
+AKSHAYAA D
+Retrieval Augmented Generation (RAG) • Agentic AI • LLM Engineering • Vector Search • Python / FastAPI • LLM Evaluation
++91 6374737790 | akshayaa.draj@gmail.com | linkedin.com/in/akshayaa-d-60b4331b1 | Coimbatore, India
+
+PROFESSIONAL SUMMARY
+Artificial Intelligence (AI) Engineer with 3+ years of software engineering experience (1.5+ years in applied AI/ML), building production Generative AI, LLM, and Agentic AI systems for enterprise supply-chain workflows at FourKites. Independently designed an AI-agent system that unlocked a landmark customer deal and automated a pipeline now processing 100% of 675+ monthly documents, cutting post-booking verification effort by 100%. Core strengths: Retrieval Augmented Generation (RAG), vector search (FAISS, Qdrant), Agentic Systems (LangChain, LangGraph, MCP), and Full Stack engineering (Python, FastAPI, Kafka).
+
+TECHNICAL SKILLS
+Languages & Core: Python, SQL
+LLM & Generative AI (GenAI): Large Language Models (LLM), Tokenization, Context Windows, Prompt Engineering, Few-Shot Prompting, Decoding
+LLM Training & Optimization Concepts: Fine-Tuning Concepts, PEFT/LoRA/QLoRA Concepts, Quantization Concepts, RLHF/DPO Concepts, KV Cache
+Retrieval Augmented Generation (RAG): Document Ingestion, Chunking, Hybrid Search, Reranking, Metadata Filtering, Top-K Retrieval, BM25
+Vector Search & Embeddings: Embeddings, Vector Search, Cosine Similarity, FAISS, ChromaDB, Qdrant, Pinecone
+LLM APIs & Tooling: OpenAI API, Azure OpenAI (GPT-4o), Claude API, GPT-4 Vision, Tool/Function Calling, Structured Outputs
+Agentic Systems: LangChain, LangGraph, Agentic Workflows, Multi-Agent Systems, Agent Engineering, Intelligent Automation, MCP (Model Context Protocol)
+Backend, Full Stack & Cloud: FastAPI, REST APIs, Full Stack Development, Async Processing, Microservices, Docker, Kubernetes, Kafka, Redis, PostgreSQL, AWS/Azure, Git
+Evaluation, Observability & MLOps: Model Evaluation, LLM Evaluation, RAG Evaluation, LLM Evaluation Frameworks, LLM Evals, Guardrails, Langfuse, OpenTelemetry, Chronosphere, SigNoz, ArgoCD, Pipedream
+AI/ML & NLP Foundations: Artificial Intelligence (AI), Machine Learning (ML), Natural Language Processing (NLP), PyTorch, Scikit-learn, Transformers, Self-Attention, ANN/CNN/RNN/LSTM, Supervised & Unsupervised Learning
+Soft Skills: Customer Communication, Cross-Functional Collaboration, Ownership Mindset, Agility, Mentoring, Analytical Thinking
+
+PROFESSIONAL EXPERIENCE
+Software Engineer I → II — FourKites (Internal Transition to AI Team, Mid-2025) Jun 2023 – Present | Coimbatore, India
+- Engineered production LLM-powered Agentic AI and Retrieval Augmented Generation (RAG) systems spanning document extraction and browser automation for enterprise supply-chain workflows.
+- Independently planned and engineered an asynchronous validation workflow running every 3 hours across carrier/retailer portals, eliminating 100% of manual post-booking verification and enabling the company's first AI-agent customer deal.
+- Replaced a hardcoded extraction system that processed only 12% of incoming files with a format-agnostic pipeline handling 20+ supplier templates, automating 100% of ~675 monthly emails.
+- Integrated GPT-4o via Azure OpenAI into a two-stage LLM pipeline, achieving ~270ms processing on 2,000+ row files via a zero-LLM fast path — balancing LLM accuracy against latency and cost.
+- Led end-to-end delivery of AI-driven automation features across 2 production AI-agent systems (ALAN, POLLY); joined customer calls to answer queries on agent behavior.
+- Co-built Web Automation Studio as 1 of 2 engineers — a reusable automation framework that traces human interactions and captures selectors for programmatic replay, foundational infrastructure for scaling agentic systems.
+- Reduced production failures through daily error monitoring and root-cause analysis; self-initiated a weekly bug-pattern review shared with the team; mentored 3 interns from onboarding through independent contribution.
+
+KEY PROJECTS
+SAM — Multimodal RAG Platform, Supplier Document Extraction | Python, GPT-4o (Azure OpenAI), CLIP, Qdrant, AWS S3 | 5-Engineer Team
+- Developed the retrieval flow for scanned PDFs and document images as part of a 5-engineer team, using CLIP embeddings and Qdrant vector search to surface similar historical documents as few-shot examples guiding GPT-4o extraction.
+- Owned system design of an end-to-end extraction pipeline handling flat and complex/merged-cell layouts across 20+ supplier templates, incorporating iterative architect review feedback.
+- Created a routing strategy pairing a lightweight non-LLM path against a two-stage GPT-4o pipeline for structure classification and extraction — directly relevant to inference efficiency and cost management.
+
+ALAN — AI Appointment Booking Agent | Python, Playwright, Azure OpenAI (GPT-4 Vision), Redis, Kafka, Pipedream | 3-Engineer Team
+- Independently led the design of an asynchronous verification workflow as part of a 3-engineer team, cross-checking agent actions against submitted data and authoring Playwright automation templates for end-to-end carrier portal onboarding (Costco, C3, UNFI, One Network).
+- Tested a self-onboarding portal tool (Appointment Manager) that auto-generates reusable templates from captured actions, and contributed to end-to-end testing of a scalable workflow architecture replacing the current Pipedream implementation.
+
+POLLY — Intelligent Document Processing Platform | Claude API, GPT-4 Vision, Python | 2-Engineer Team
+- Took ownership as primary engineer in a 2-engineer team, building deep end-to-end understanding of a vision-based document classification and extraction agent with tiered escalation logic and weekly performance reporting.
+
+EDUCATION
+Bachelor of Technology (B.Tech), Information Technology, Sri Krishna College of Engineering and Technology | Jul 2019 – May 2023 | Coimbatore, India
+- CGPA: 9.34 / 10.0

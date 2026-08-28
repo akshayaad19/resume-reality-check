@@ -1,0 +1,11 @@
+Company Description Margn designs and deploys automated AI Agentic workflows for SME's in India, Dubai and Singapore. The company focuses on building intelligent systems that streamline operations, enhance customer interactions, and support data-driven decision-making for its clients. Working at Margn offers exposure to real-world AI applications in highly dynamic, service-oriented industries. Team members collaborate across product, engineering, and client success functions to deliver scalable AI solutions tailored to each business. The organization values innovation, practical problem-solving, and ethical use of AI technologies.
+Role Description As an Artificial Intelligence Engineer, you will design, build, and optimize AI solutions that power our automation solutions & agents for our clients. On a day-to-day basis, you will develop and orchestrate AI automation architectures, implement and test systems, and integrate these models into production-grade software solutions. You will work closely with clients to translate business workflows into robust AI capabilities, improve existing models based on performance metrics, and ensure reliability and scalability in a remote environment. This is a full-time remote role that involves regular collaboration through online tools, participation in code reviews, documentation of solutions, and continuous improvement of our AI platform.
+Qualifications
+
+Strong foundation in Computer Science and Software Development, including data structures, algorithms, and scalable system design.
+Hands-on experience with AI orchestration, RAG
+Understanding of business processes and workflows and translation into automated solutions
+Proficiency in programming languages commonly used in AI (such as Python) and familiarity with ML operations, testing, and deployment practices.
+Bachelor’s or Master’s degree in Computer Science, Engineering, Data Science, or a related technical field, or equivalent practical experience.
+Ability to work effectively in a remote, distributed team, with strong communication, documentation, and collaboration skills.
+Experience applying AI is beneficial, as is exposure to cloud platforms and API-based integrations.
