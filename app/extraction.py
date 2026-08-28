@@ -55,10 +55,26 @@ You are analyzing a resume. Split its content into two categories:
 technologies, tools, or skills listed in a "Skills", "Technologies", or similar \
 section, with no accompanying description of how they were used.
 
-2. "evidence": full experience or project bullet points, copied VERBATIM from the \
-resume, that describe what the person actually did (responsibilities, projects, \
-achievements). Do not summarize or paraphrase - copy the bullet text exactly as \
-it appears.
+2. "evidence": full experience or project bullet points, that describe what the \
+person actually did (responsibilities, projects, achievements). Copy each bullet's \
+text VERBATIM from the resume - do not summarize or paraphrase it.
+
+For bullets under a PROJECT (a project is introduced by a header line naming the \
+project and listing its tech stack, commonly in a format like \
+"<Project Name> — <description> | <tech stack> | <team size>"), prepend the \
+project's tech-stack tags to the bullet text before adding it to "evidence", as \
+"[Technologies used: <tech stack>] <verbatim bullet text>". Take the tech stack \
+straight from that project's header line (the pipe-delimited list of \
+technologies/tools, not the team-size segment), and apply it to every bullet that \
+falls under that project header, until the next project or section header. Do not \
+add this tag to bullets outside a project section (e.g. general work-experience \
+bullets that aren't under a project header) - copy those verbatim with no prefix.
+
+Also add "claims" derived from the EDUCATION section: for each degree, include \
+the field of study itself (e.g. "Information Technology") plus the closely \
+related domain terms it commonly implies (e.g. a degree in "Information \
+Technology" also implies "Computer Science" and "Software Development"). Add \
+each of these as its own separate claim string.
 
 Resume text:
 ---

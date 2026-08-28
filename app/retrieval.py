@@ -11,6 +11,8 @@ from sentence_transformers import SentenceTransformer
 
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 RRF_K = 60
+MIN_RELEVANCE_SCORE = 0.0320
+CLAIM_MATCH_THRESHOLD = 0.50
 
 _embedder: SentenceTransformer | None = None
 
@@ -49,7 +51,11 @@ class EvidenceIndex:
 
     def search(self, query: str, top_k: int = 5) -> List[Tuple[str, float]]:
         """Hybrid search combining BM25 keyword ranking and semantic similarity
-        ranking via Reciprocal Rank Fusion (RRF)."""
+        ranking via Reciprocal Rank Fusion (RRF).
+
+        Returns an empty list if the top fused score falls below
+        MIN_RELEVANCE_SCORE, treating the query as having no relevant evidence
+        rather than returning weak, low-confidence chunks."""
         if not self.chunks:
             return []
 
@@ -67,4 +73,20 @@ class EvidenceIndex:
             rrf_scores[int(idx)] += 1.0 / (RRF_K + rank + 1)
 
         fused = sorted(rrf_scores.items(), key=lambda kv: kv[1], reverse=True)[:top_k]
+        if not fused or fused[0][1] < MIN_RELEVANCE_SCORE:
+            return []
         return [(self.chunks[idx], score) for idx, score in fused]
+
+
+def skill_is_claimed(skill: str, claims: List[str]) -> bool:
+    """True if any resume claim is semantically similar enough to the skill,
+    via cosine similarity of all-MiniLM-L6-v2 embeddings (catches wording
+    differences that exact string matching misses, e.g. JD "RAG" vs resume
+    "Retrieval Augmented Generation (RAG)")."""
+    if not claims:
+        return False
+    embedder = _get_embedder()
+    skill_embedding = embedder.encode([skill], normalize_embeddings=True)[0]
+    claim_embeddings = embedder.encode(claims, normalize_embeddings=True)
+    best_similarity = float(np.max(claim_embeddings @ skill_embedding))
+    return best_similarity >= CLAIM_MATCH_THRESHOLD

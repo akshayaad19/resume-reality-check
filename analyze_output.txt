@@ -1,0 +1,337 @@
+/analyze pipeline output
+Resume: test_resume.txt | Job description: test_jd.txt
+Generated: 2026-08-28 (Gemini gemini-3.6-flash extraction + judge, hybrid BM25+embedding retrieval, tech-stack-tag fix applied)
+
+================================================================================
+CLAIMS (85)
+================================================================================
+Retrieval Augmented Generation (RAG)
+Agentic AI
+LLM Engineering
+Vector Search
+Python / FastAPI
+LLM Evaluation
+Python
+SQL
+Large Language Models (LLM)
+Tokenization
+Context Windows
+Prompt Engineering
+Few-Shot Prompting
+Decoding
+Fine-Tuning Concepts
+PEFT/LoRA/QLoRA Concepts
+Quantization Concepts
+RLHF/DPO Concepts
+KV Cache
+Document Ingestion
+Chunking
+Hybrid Search
+Reranking
+Metadata Filtering
+Top-K Retrieval
+BM25
+Embeddings
+Vector Search
+Cosine Similarity
+FAISS
+ChromaDB
+Qdrant
+Pinecone
+OpenAI API
+Azure OpenAI (GPT-4o)
+Claude API
+GPT-4 Vision
+Tool/Function Calling
+Structured Outputs
+LangChain
+LangGraph
+Agentic Workflows
+Multi-Agent Systems
+Agent Engineering
+Intelligent Automation
+MCP (Model Context Protocol)
+FastAPI
+REST APIs
+Full Stack Development
+Async Processing
+Microservices
+Docker
+Kubernetes
+Kafka
+Redis
+PostgreSQL
+AWS/Azure
+Git
+Model Evaluation
+LLM Evaluation
+RAG Evaluation
+LLM Evaluation Frameworks
+LLM Evals
+Guardrails
+Langfuse
+OpenTelemetry
+Chronosphere
+SigNoz
+ArgoCD
+Pipedream
+Artificial Intelligence (AI)
+Machine Learning (ML)
+Natural Language Processing (NLP)
+PyTorch
+Scikit-learn
+Transformers
+Self-Attention
+ANN/CNN/RNN/LSTM
+Supervised & Unsupervised Learning
+Customer Communication
+Cross-Functional Collaboration
+Ownership Mindset
+Agility
+Mentoring
+Analytical Thinking
+
+================================================================================
+EVIDENCE BULLETS (13)
+================================================================================
+1. Engineered production LLM-powered Agentic AI and Retrieval Augmented Generation (RAG) systems spanning document extraction and browser automation for enterprise supply-chain workflows.
+
+2. Independently planned and engineered an asynchronous validation workflow running every 3 hours across carrier/retailer portals, eliminating 100% of manual post-booking verification and enabling the company's first AI-agent customer deal.
+
+3. Replaced a hardcoded extraction system that processed only 12% of incoming files with a format-agnostic pipeline handling 20+ supplier templates, automating 100% of ~675 monthly emails.
+
+4. Integrated GPT-4o via Azure OpenAI into a two-stage LLM pipeline, achieving ~270ms processing on 2,000+ row files via a zero-LLM fast path — balancing LLM accuracy against latency and cost.
+
+5. Led end-to-end delivery of AI-driven automation features across 2 production AI-agent systems (ALAN, POLLY); joined customer calls to answer queries on agent behavior.
+
+6. Co-built Web Automation Studio as 1 of 2 engineers — a reusable automation framework that traces human interactions and captures selectors for programmatic replay, foundational infrastructure for scaling agentic systems.
+
+7. Reduced production failures through daily error monitoring and root-cause analysis; self-initiated a weekly bug-pattern review shared with the team; mentored 3 interns from onboarding through independent contribution.
+
+8. [Technologies used: Python, GPT-4o (Azure OpenAI), CLIP, Qdrant, AWS S3] Developed the retrieval flow for scanned PDFs and document images as part of a 5-engineer team, using CLIP embeddings and Qdrant vector search to surface similar historical documents as few-shot examples guiding GPT-4o extraction.
+
+9. [Technologies used: Python, GPT-4o (Azure OpenAI), CLIP, Qdrant, AWS S3] Owned system design of an end-to-end extraction pipeline handling flat and complex/merged-cell layouts across 20+ supplier templates, incorporating iterative architect review feedback.
+
+10. [Technologies used: Python, GPT-4o (Azure OpenAI), CLIP, Qdrant, AWS S3] Created a routing strategy pairing a lightweight non-LLM path against a two-stage GPT-4o pipeline for structure classification and extraction — directly relevant to inference efficiency and cost management.
+
+11. [Technologies used: Python, Playwright, Azure OpenAI (GPT-4 Vision), Redis, Kafka, Pipedream] Independently led the design of an asynchronous verification workflow as part of a 3-engineer team, cross-checking agent actions against submitted data and authoring Playwright automation templates for end-to-end carrier portal onboarding (Costco, C3, UNFI, One Network).
+
+12. [Technologies used: Python, Playwright, Azure OpenAI (GPT-4 Vision), Redis, Kafka, Pipedream] Tested a self-onboarding portal tool (Appointment Manager) that auto-generates reusable templates from captured actions, and contributed to end-to-end testing of a scalable workflow architecture replacing the current Pipedream implementation.
+
+13. [Technologies used: Claude API, GPT-4 Vision, Python] Took ownership as primary engineer in a 2-engineer team, building deep end-to-end understanding of a vision-based document classification and extraction agent with tiered escalation logic and weekly performance reporting.
+
+================================================================================
+SKILLS TABLE (13 skills: 10 required, 3 preferred)
+================================================================================
+
+--------------------------------------------------------------------------------
+Skill:            Computer Science and Software Development
+Category:         required
+Claimed on Resume: No
+Evidence Score:    3
+Justification:     The chunk demonstrates ownership and continuous improvement by
+                    reducing production failures through daily error monitoring,
+                    self-initiating weekly bug reviews, and mentoring 3 interns
+                    from onboarding to independent contribution.
+Cited Evidence:    "Reduced production failures through daily error monitoring
+                    and root-cause analysis; self-initiated a weekly bug-pattern
+                    review shared with the team; mentored 3 interns from
+                    onboarding through independent contribution."
+
+--------------------------------------------------------------------------------
+Skill:            Data structures and algorithms
+Category:         required
+Claimed on Resume: No
+Evidence Score:    2
+Justification:     The chunk details building a document retrieval flow using
+                    CLIP embeddings and Qdrant vector search for few-shot
+                    similarity matching to guide LLM extraction.
+Cited Evidence:    "[Technologies used: Python, GPT-4o (Azure OpenAI), CLIP,
+                    Qdrant, AWS S3] Developed the retrieval flow for scanned
+                    PDFs and document images as part of a 5-engineer team, using
+                    CLIP embeddings and Qdrant vector search to surface similar
+                    historical documents as few-shot examples guiding GPT-4o
+                    extraction."
+
+--------------------------------------------------------------------------------
+Skill:            Scalable system design
+Category:         required
+Claimed on Resume: No
+Evidence Score:    3
+Justification:     The candidate replaced a legacy system processing only 12%
+                    of incoming files with a format-agnostic pipeline handling
+                    20+ supplier templates, achieving 100% automation across
+                    ~675 monthly emails.
+Cited Evidence:    "Replaced a hardcoded extraction system that processed only
+                    12% of incoming files with a format-agnostic pipeline
+                    handling 20+ supplier templates, automating 100% of ~675
+                    monthly emails."
+
+--------------------------------------------------------------------------------
+Skill:            AI orchestration
+Category:         required
+Claimed on Resume: No
+Evidence Score:    3
+Justification:     The candidate independently designed and built an automated
+                    AI validation workflow running every 3 hours across
+                    multiple portals, eliminating 100% of manual verification
+                    and enabling the company's first AI-agent customer deal.
+Cited Evidence:    "Independently planned and engineered an asynchronous
+                    validation workflow running every 3 hours across
+                    carrier/retailer portals, eliminating 100% of manual
+                    post-booking verification and enabling the company's first
+                    AI-agent customer deal."
+
+--------------------------------------------------------------------------------
+Skill:            RAG
+Category:         required
+Claimed on Resume: No
+Evidence Score:    2
+Justification:     The chunk details the implementation of a retrieval flow
+                    utilizing CLIP embeddings and Qdrant vector search to
+                    retrieve similar historical document examples for LLM
+                    context enrichment.
+Cited Evidence:    "[Technologies used: Python, GPT-4o (Azure OpenAI), CLIP,
+                    Qdrant, AWS S3] Developed the retrieval flow for scanned
+                    PDFs and document images as part of a 5-engineer team, using
+                    CLIP embeddings and Qdrant vector search to surface similar
+                    historical documents as few-shot examples guiding GPT-4o
+                    extraction."
+
+--------------------------------------------------------------------------------
+Skill:            Business process automation
+Category:         required
+Claimed on Resume: No
+Evidence Score:    2
+Justification:     The candidate independently led the design of an
+                    asynchronous verification workflow and authored Playwright
+                    automation templates for carrier portal onboarding across
+                    multiple major enterprise portals.
+Cited Evidence:    "[Technologies used: Python, Playwright, Azure OpenAI (GPT-4
+                    Vision), Redis, Kafka, Pipedream] Independently led the
+                    design of an asynchronous verification workflow as part of
+                    a 3-engineer team, cross-checking agent actions against
+                    submitted data and authoring Playwright automation
+                    templates for end-to-end carrier portal onboarding (Costco,
+                    C3, UNFI, One Network)."
+
+--------------------------------------------------------------------------------
+Skill:            Python                                          *** FOCUS ROW ***
+Category:         required
+Claimed on Resume: Yes
+Evidence Score:    2
+Justification:     The candidate acted as primary engineer using Python and
+                    LLM APIs to build a vision-based document classification
+                    and extraction agent with escalation logic.
+Cited Evidence:    "[Technologies used: Claude API, GPT-4 Vision, Python] Took
+                    ownership as primary engineer in a 2-engineer team,
+                    building deep end-to-end understanding of a vision-based
+                    document classification and extraction agent with tiered
+                    escalation logic and weekly performance reporting."
+Note:              Before the tech-stack-tag fix, this evidence bullet (POLLY
+                    project) contained no literal mention of "Python" in its
+                    own text, so BM25 retrieval and the judge's evidence would
+                    not have surfaced Python here. The "[Technologies used:
+                    ...]" prefix now makes Python retrievable and citable for
+                    this bullet.
+
+--------------------------------------------------------------------------------
+Skill:            MLOps
+Category:         required
+Claimed on Resume: No
+Evidence Score:    2
+Justification:     The candidate took primary engineering ownership of a
+                    vision-based classification and extraction agent,
+                    implementing tiered escalation logic and weekly
+                    performance reporting.
+Cited Evidence:    "[Technologies used: Claude API, GPT-4 Vision, Python] Took
+                    ownership as primary engineer in a 2-engineer team,
+                    building deep end-to-end understanding of a vision-based
+                    document classification and extraction agent with tiered
+                    escalation logic and weekly performance reporting."
+
+--------------------------------------------------------------------------------
+Skill:            Testing and deployment practices
+Category:         required
+Claimed on Resume: No
+Evidence Score:    2
+Justification:     The candidate conducted testing on a self-onboarding portal
+                    tool and contributed to end-to-end testing of a scalable
+                    workflow architecture to replace existing infrastructure.
+Cited Evidence:    "[Technologies used: Python, Playwright, Azure OpenAI (GPT-4
+                    Vision), Redis, Kafka, Pipedream] Tested a self-onboarding
+                    portal tool (Appointment Manager) that auto-generates
+                    reusable templates from captured actions, and contributed
+                    to end-to-end testing of a scalable workflow architecture
+                    replacing the current Pipedream implementation."
+
+--------------------------------------------------------------------------------
+Skill:            Communication, documentation, and collaboration
+Category:         required
+Claimed on Resume: No
+Evidence Score:    3
+Justification:     The candidate initiated and led team-wide weekly
+                    bug-pattern reviews and mentored 3 interns from onboarding
+                    to independent code contribution.
+Cited Evidence:    "Reduced production failures through daily error monitoring
+                    and root-cause analysis; self-initiated a weekly
+                    bug-pattern review shared with the team; mentored 3
+                    interns from onboarding through independent contribution."
+
+--------------------------------------------------------------------------------
+Skill:            Practical AI application
+Category:         preferred
+Claimed on Resume: No
+Evidence Score:    3
+Justification:     The candidate engineered an asynchronous validation
+                    workflow across carrier/retailer portals using AI agents,
+                    completely eliminating manual post-booking verification
+                    and securing the company's first AI-agent customer deal.
+Cited Evidence:    "Independently planned and engineered an asynchronous
+                    validation workflow running every 3 hours across
+                    carrier/retailer portals, eliminating 100% of manual
+                    post-booking verification and enabling the company's first
+                    AI-agent customer deal."
+
+--------------------------------------------------------------------------------
+Skill:            Cloud platforms
+Category:         preferred
+Claimed on Resume: No
+Evidence Score:    2
+Justification:     The candidate utilized Azure OpenAI and AWS S3 in designing
+                    an end-to-end document extraction pipeline supporting over
+                    20 supplier templates.
+Cited Evidence:    "[Technologies used: Python, GPT-4o (Azure OpenAI), CLIP,
+                    Qdrant, AWS S3] Owned system design of an end-to-end
+                    extraction pipeline handling flat and complex/merged-cell
+                    layouts across 20+ supplier templates, incorporating
+                    iterative architect review feedback."
+
+--------------------------------------------------------------------------------
+Skill:            API-based integrations
+Category:         preferred
+Claimed on Resume: No
+Evidence Score:    2
+Justification:     The candidate integrated Claude API and GPT-4 Vision to
+                    build a document classification and extraction agent with
+                    tiered escalation logic.
+Cited Evidence:    "[Technologies used: Claude API, GPT-4 Vision, Python] Took
+                    ownership as primary engineer in a 2-engineer team,
+                    building deep end-to-end understanding of a vision-based
+                    document classification and extraction agent with tiered
+                    escalation logic and weekly performance reporting."
+
+================================================================================
+SUMMARY
+================================================================================
+Python: score 2/3 ("Applied"), claimed_on_resume = Yes. Cited evidence is the
+POLLY bullet, now tagged "[Technologies used: Claude API, GPT-4 Vision,
+Python]" thanks to the tech-stack-tag fix in the extraction prompt. Sits
+mid-pack among the 13 judged skills: tied at 2/3 with RAG, Data structures and
+algorithms, Business process automation, MLOps, Testing and deployment
+practices, Cloud platforms, and API-based integrations. The top tier (3/3) -
+Computer Science and Software Development, Scalable system design, AI
+orchestration, Communication/documentation/collaboration, and Practical AI
+application - is backed by bullets with explicit, measurable outcomes (100%
+automation, 20+ templates, 675 monthly emails, etc.), which the rubric weighs
+more heavily than tech-stack breadth alone.

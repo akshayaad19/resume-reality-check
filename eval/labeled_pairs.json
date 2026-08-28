@@ -1,0 +1,110 @@
+[
+  {
+    "skill": "Computer Science and Software Development",
+    "evidence_shown": "Mentored 3 interns; self-initiated weekly bug-pattern reviews",
+    "system_score": 3,
+    "my_score": 2,
+    "agree": false,
+    "correct_claimed_on_resume": true,
+    "reasoning": "System scored 3/3, but cited evidence is general engineering practice, not direct CS/software fundamentals. claimed_on_resume showed 'No' but should be 'Yes' - resume lists B.Tech in Information Technology in Education section, which extraction currently misses since it only pulls from the skills section."
+  },
+  {
+    "skill": "Data structures and algorithms",
+    "evidence_shown": "Built retrieval flow using CLIP embeddings and Qdrant vector search",
+    "system_score": 2,
+    "my_score": 0,
+    "agree": false,
+    "correct_claimed_on_resume": false,
+    "reasoning": "Semantic over-match/false positive. Using a vector database tool is not evidence of designing or implementing data structures or algorithms."
+  },
+  {
+    "skill": "AI orchestration",
+    "evidence_shown": "Independently planned and engineered an asynchronous validation workflow running every 3 hours across carrier/retailer portals, eliminating 100% of manual post-booking verification and enabling the company's first AI-agent customer deal.",
+    "system_score": 3,
+    "my_score": 3,
+    "agree": true,
+    "correct_claimed_on_resume": false,
+    "reasoning": "Direct conceptual match with a specific, quantified outcome. Correctly scored."
+  },
+  {
+    "skill": "RAG",
+    "evidence_shown": "Developed retrieval flow using CLIP embeddings and Qdrant vector search for few-shot document retrieval guiding GPT-4o extraction",
+    "system_score": 2,
+    "my_score": 2,
+    "agree": true,
+    "correct_claimed_on_resume": true,
+    "reasoning": "Score is reasonable, genuine RAG implementation without a quantified outcome. claimed_on_resume showed 'No' but should be 'Yes' - resume header explicitly lists 'Retrieval Augmented Generation (RAG)', exact-string matching failed to connect it to the JD's 'RAG'."
+  },
+  {
+    "skill": "Business process automation",
+    "evidence_shown": "Independently led the design of an asynchronous verification workflow and authored Playwright automation templates for carrier portal onboarding (Costco, C3, UNFI, One Network).",
+    "system_score": 2,
+    "my_score": 2,
+    "agree": true,
+    "correct_claimed_on_resume": true,
+    "reasoning": "Direct, concrete match with named clients/processes. claimed_on_resume showed 'No' but should be 'Yes' - resume lists 'Intelligent Automation' in the skills section, a reasonably close match to this JD skill, not a false positive."
+  },
+  {
+    "skill": "Python",
+    "evidence_shown": "Primary engineer on POLLY - vision-based document classification and extraction agent with tiered escalation logic",
+    "system_score": 2,
+    "my_score": 2,
+    "agree": true,
+    "correct_claimed_on_resume": true,
+    "reasoning": "Flagship fix verification. Before the tech-stack-tag fix this scored 0 since no chunk literally mentioned Python despite it being used in every project. After prepending project tech-stack tags to evidence bullets, Python is now correctly retrievable and citable."
+  },
+  {
+    "skill": "MLOps",
+    "evidence_shown": "Primary engineer role, tiered escalation logic, weekly performance reporting",
+    "system_score": 2,
+    "my_score": 0,
+    "agree": false,
+    "correct_claimed_on_resume": true,
+    "reasoning": "Semantic over-match/false positive. Actual MLOps-relevant tools on resume (Langfuse, OpenTelemetry, Chronosphere, SigNoz) are claimed but have zero evidence bullets describing their usage. Judge cited an unrelated bullet instead of reporting no real evidence."
+  },
+  {
+    "skill": "Testing and deployment practices",
+    "evidence_shown": "Tested a self-onboarding portal tool; contributed to end-to-end testing of a workflow architecture",
+    "system_score": 2,
+    "my_score": 1,
+    "agree": false,
+    "correct_claimed_on_resume": true,
+    "reasoning": "Same systematic pattern as Data structures/algorithms and MLOps. Actual relevant claims exist (ArgoCD for deployment, Model/LLM/RAG Evaluation and Guardrails for testing) but have zero evidence bullets."
+  },
+  {
+    "skill": "Communication, documentation, and collaboration",
+    "evidence_shown": "Led weekly bug-pattern reviews; mentored 3 interns from onboarding to independent contribution",
+    "system_score": 3,
+    "my_score": 3,
+    "agree": true,
+    "correct_claimed_on_resume": true,
+    "reasoning": "Score is correct. claimed_on_resume showed 'No' but should be 'Yes' - resume explicitly lists Customer Communication, Cross-Functional Collaboration, and Mentoring in the skills section."
+  },
+  {
+    "skill": "Practical AI application",
+    "evidence_shown": "Engineered asynchronous validation workflow using AI agents, eliminating 100% of manual post-booking verification, enabling first AI-agent customer deal",
+    "system_score": 3,
+    "my_score": 3,
+    "agree": true,
+    "correct_claimed_on_resume": true,
+    "reasoning": "Correct - strong, concrete, quantified real-world AI application. claimed_on_resume showed 'No' but should be 'Yes' - resume lists 'Artificial Intelligence (AI)' in the skills section, a reasonably close match to this JD skill, not a false positive."
+  },
+  {
+    "skill": "Cloud platforms",
+    "evidence_shown": "Used Azure OpenAI and AWS S3 in production extraction pipeline across 20+ supplier templates",
+    "system_score": 2,
+    "my_score": 2,
+    "agree": true,
+    "correct_claimed_on_resume": true,
+    "reasoning": "Score is reasonable. claimed_on_resume showed 'No' but should be 'Yes' - resume explicitly lists 'AWS/Azure' in the skills section."
+  },
+  {
+    "skill": "API-based integrations",
+    "evidence_shown": "Integrated Claude API and GPT-4 Vision into a vision-based document classification and extraction agent",
+    "system_score": 2,
+    "my_score": 2,
+    "agree": true,
+    "correct_claimed_on_resume": true,
+    "reasoning": "Score is reasonable. claimed_on_resume showed 'No' but should be 'Yes' - resume lists Claude API, GPT-4 Vision, OpenAI API, and Azure OpenAI in the skills section."
+  }
+]
