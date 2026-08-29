@@ -57,6 +57,10 @@ class JobSkills(BaseModel):
     preferred_skills: List[str]
 
 
+class QueryReformulation(BaseModel):
+    alternate_phrasings: List[str]
+
+
 RESUME_EXTRACTION_PROMPT = """\
 You are analyzing a resume. Split its content into two categories:
 
@@ -103,6 +107,16 @@ Job description:
 ---
 """
 
+REFORMULATE_QUERY_PROMPT = """\
+A retrieval search for the skill "{skill}" against a candidate's resume evidence \
+returned no good matches, possibly because the resume describes the same \
+underlying work using different words (e.g. "container orchestration" instead of \
+"Kubernetes"). Give 2-3 alternate phrasings or closely related terms for "{skill}" \
+that someone might use instead when describing hands-on experience with it. Keep \
+each phrasing short (a few words), suitable as a search query. Do not include the \
+original phrasing "{skill}" itself in the list.
+"""
+
 
 def extract_resume_claims_and_evidence(resume_text: str) -> ResumeExtraction:
     client = _get_client()
@@ -132,3 +146,28 @@ def extract_job_skills(job_description: str) -> JobSkills:
         ),
     )
     return JobSkills.model_validate_json(response.text)
+
+
+def reformulate_query(skill: str) -> List[str]:
+    """Asks Gemini for 2-3 alternate phrasings of `skill`, for retrying a
+    hybrid search that scored the literal skill name below
+    MIN_RELEVANCE_SCORE. Used by retrieval.search_with_fallback() to recover
+    from a wording mismatch (skill genuinely present in the evidence, but
+    described differently). Distinguishing that from a genuine gap (skill
+    actually absent) is not this function's job or search_with_fallback's -
+    no retrieval-side numeric threshold reliably does that on this project's
+    small evidence corpus (see debugging-log.md); the reformulated result is
+    passed through to the downstream LLM judge unfiltered, which decides
+    from the actual chunk content."""
+    client = _get_client()
+    response = _generate_with_retry(
+        client,
+        model=MODEL,
+        contents=REFORMULATE_QUERY_PROMPT.format(skill=skill),
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=QueryReformulation,
+            temperature=0,
+        ),
+    )
+    return QueryReformulation.model_validate_json(response.text).alternate_phrasings

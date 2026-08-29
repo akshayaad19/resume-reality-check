@@ -427,3 +427,263 @@ Track issues found while running/testing resume-reality-check here.
   (a fresh `/analyze` run producing a current zero-evidence-skill list, the
   original goal) is still blocked on the day's quota resetting or a new API
   key.
+
+- **Date:** 2026-08-29
+- **Issue:** Before shipping `search_with_fallback()` (a proposed
+  self-healing addition to hybrid retrieval: if a skill's literal wording
+  scores below `MIN_RELEVANCE_SCORE`, ask Gemini for alternate phrasings
+  via a new `reformulate_query()` and retry), tested it against 3 known
+  cases first, using the real 13-bullet evidence set from `test_resume.txt`
+  (no GitHub evidence) and real `reformulate_query()` Gemini calls (not
+  hand-picked phrasings): `Observability` (expected to recover - a resume
+  bullet describes "daily error monitoring and root-cause analysis" without
+  using the word), `Reranking` (expected NOT to recover - an earlier probe
+  showed a literal-vs-hand-picked-alternate comparison crossing
+  `MIN_RELEVANCE_SCORE` by matching a topically-unrelated chunk), and
+  `MLOps` (expected NOT to recover - `eval/labeled_pairs.json` has a human
+  label calling an earlier system version's MLOps evidence a "false
+  positive," since the specific claimed tools - Langfuse, OpenTelemetry,
+  Chronosphere, SigNoz - have zero evidence bullets).
+- **First implementation and why it wasn't accepted as-is:** Initial
+  design only required a reformulated query's score to clear
+  `MIN_RELEVANCE_SCORE`, same as a normal search. A prior probe (same
+  session, hand-picked alternate phrasings rather than live
+  `reformulate_query()` output) showed every candidate query's top fused
+  score - relevant or not - clustering within a ~0.0013 band (0.0315-0.0328)
+  around `MIN_RELEVANCE_SCORE` (0.0320), on this project's ~13-chunk resume
+  evidence corpus: with `RRF_K=60`, `1/(RRF_K + rank + 1)` fusion means the
+  top-ranked chunk for almost any query lands near rank 0-1 in both BM25
+  and semantic rankings purely from small corpus size, so the top fused
+  score barely tracks actual relevance. `Reranking` demonstrated this
+  concretely: a hand-picked alternate phrasing ("ranking retrieved results
+  by relevance") crossed the threshold by matching a chunk about
+  "vision-based document classification" - unrelated to reranking. Fixed,
+  before ever merging, by adding `QUERY_REFORMULATION_MARGIN` (0.0050, ~4x
+  the measured noise spread): a reformulated query's score must clear
+  `MIN_RELEVANCE_SCORE` **and** beat the original query's own score by more
+  than this margin, not just cross the fixed line.
+- **Verification result: the margin fix does NOT separate the 3 cases as
+  intended, and this is a real, unresolved finding, not a margin-tuning
+  problem:**
+
+  | Skill | Score A (literal) | Best Score B (reformulated) | B - A | Expected | Actual |
+  |---|---|---|---|---|---|
+  | Observability | 0.0317 | 0.0323 | **0.0006** | recover | did not recover |
+  | Reranking | 0.0318 | 0.0328 | 0.0010 | must not recover | did not recover |
+  | MLOps | 0.0315 | 0.0325 | 0.0010 | must not recover | did not recover |
+
+  `QUERY_REFORMULATION_MARGIN=0.0050` correctly rejected all three (none of
+  the deltas reach 0.0050), so no false positive slipped through - but it
+  also rejected `Observability`, the one case that should have recovered.
+  Worse: **no margin value could have separated these correctly.**
+  `Observability`'s delta (0.0006) is the *smallest* of the three, while
+  `Reranking` and `MLOps` - the two cases that must NOT recover - both show
+  a *larger* delta (0.0010) than the genuine wording-mismatch case. Any
+  margin low enough to accept `Observability` (< 0.0006) would also accept
+  both cases it must reject; any margin that rejects `Reranking`/`MLOps`
+  (>= 0.0010) also rejects `Observability`. The ranking of score deltas is
+  inverted relative to what the margin mechanism assumes. Likely cause
+  (not yet independently verified): `Observability`'s literal-query score
+  (0.0317) already sits close to the ceiling other queries top out at on
+  this corpus, leaving little headroom to "improve" on retry, while
+  `Reranking`/`MLOps`'s lower starting scores (0.0318, 0.0315) leave more
+  headroom for an unrelated-but-differently-ranked chunk to produce a
+  larger, noise-driven delta on retry - i.e. the margin is measuring how
+  much room a query's starting score had to move, not how relevant the
+  reformulated match actually is.
+- **Status:** NOT shipped. `search_with_fallback()`, `reformulate_query()`,
+  and `QUERY_REFORMULATION_MARGIN` are implemented in `app/retrieval.py` /
+  `app/extraction.py` but not wired into `main.py`'s live `/analyze`
+  pipeline - this pre-ship test caught that the margin-over-original-score
+  mechanism, as specified, doesn't work on this corpus size before it could
+  reach production and silently reintroduce the exact false-positive
+  pattern (`eval/labeled_pairs.json`'s MLOps case) the feature was meant to
+  avoid. Needs a different accept/reject signal before shipping - candidates
+  not yet tried: a semantic-only cosine-similarity floor computed
+  independently of RRF rank position (rank-based fusion is the specific
+  mechanism producing the corpus-size noise), or dropping the retrieval-side
+  gate entirely and relying on the downstream LLM judge to reject an
+  irrelevant cited chunk instead.
+
+- **Date:** 2026-08-29
+- **Issue:** Follow-up to the entry above. Tried the first untried
+  candidate - a margin over semantic-only (cosine similarity) top-1 score
+  instead of the RRF-fused score, since RRF's rank-based fusion was the
+  specific thing implicated in the inverted ordering. Measured the
+  semantic-only score spread across the same 3 cases first (reusing the
+  exact reformulated phrasings already obtained from live
+  `reformulate_query()` calls in the prior entry, to keep this a controlled
+  comparison of the scoring mechanism against the same inputs, and to avoid
+  spending more of the daily quota) before picking any margin, per the
+  plan.
+- **Result: numeric ordering technically separated the 3 cases this time -
+  but a deeper check showed the mechanism still isn't trustworthy:**
+
+  | Skill | sem_A (literal) | Best sem_B (reformulated) | Delta | Ordering vs. RRF attempt |
+  |---|---|---|---|---|
+  | Observability | 0.1455 | 0.3970 (`"Distributed tracing"`) | **+0.2515 (largest)** | inverted (was smallest) |
+  | Reranking | 0.2187 | 0.4048 (`"Two-stage retrieval"`) | +0.1861 (smallest) | inverted (was tied-largest) |
+  | MLOps | 0.2387 | 0.4830 (`"ML Pipeline Automation"`) | +0.2443 | inverted (was tied-largest) |
+
+  By delta magnitude alone, `Observability` now has the largest
+  improvement, correctly ahead of both cases that shouldn't recover - the
+  RRF-based inversion is gone. But inspecting which chunk each reformulated
+  query actually top-ranks (top-3 semantic matches per query, printed and
+  checked by hand) found two deeper problems this metric alone couldn't
+  see: (1) for `Observability`, the real "daily error monitoring and
+  root-cause analysis" bullet (chunk index 6) never ranked #1 for the
+  literal query OR any of the 3 real reformulated phrasings tried
+  (`"Application performance monitoring"`, `"Distributed tracing"`,
+  `"Metrics logging and alerting"`) - it topped out at rank 2. The
+  highest-scoring chunk for the winning reformulation was instead an
+  unrelated Playwright/Redis/Kafka async-workflow bullet - i.e. the
+  numerically "best" case's own top-1 recovery would have been *wrong
+  evidence*, even though its score delta correctly ranked highest. (2) For
+  `Reranking`, the real reformulated phrasing `"Two-stage retrieval"`
+  legitimately top-matched a CLIP+Qdrant vector-search chunk that IS
+  plausibly relevant to reranking - undermining `Reranking`'s status as an
+  unambiguous "shouldn't recover" negative control under this run's actual
+  Gemini-generated phrasings (vs. the hand-picked phrasing used in the
+  original RRF-based probe, which had clearly recovered irrelevant
+  content). Conclusion: a top-1 chunk-similarity score, whichever metric
+  it's computed from (RRF-fused or semantic-only), isn't a reliable enough
+  proxy for genuine topical relevance to gate on by itself on this
+  project's small evidence corpus - the score magnitude and the content
+  correctness of what it's pointing at came apart in both attempts.
+- **Fix (per plan: stop margin-tuning, try the LLM-judge-based fallback
+  instead):** Rewrote `search_with_fallback()` (`app/retrieval.py`) to drop
+  the retrieval-side numeric gate on the reformulation tier entirely.
+  Behavior now: literal skill search still gates on `MIN_RELEVANCE_SCORE`
+  as before (unchanged, cheap, and never shown to be the problem); once
+  that fails, EVERY reformulated attempt runs (no early-accept short
+  circuit), the single best-scoring one by semantic-only top score is
+  selected, and its top-`k` chunks (not just its top-1) are passed straight
+  to the downstream LLM judge with no further filtering - the judge decides
+  relevance from actual chunk content, not a similarity number. Removed the
+  now-unused `QUERY_REFORMULATION_MARGIN` constant and its comment block;
+  added a new `EvidenceIndex._search_semantic()` (cosine-similarity-only,
+  no BM25/RRF) and `_search_scores()` (returns both the fused and
+  semantic-only lists from one embedding call, so the literal query's
+  semantic score - not currently used by this version, but kept for the
+  original score-A lookup - doesn't need a second `encode()`).
+  `github_index`'s fallback tier is unchanged (still gated normally via
+  `.search()`) since it's a separately-proven code path, not implicated in
+  either failed experiment above.
+- **Verification: ran the actual rewritten `search_with_fallback()` end to
+  end (fresh live `reformulate_query()` calls, not reused phrasings this
+  time) followed by the real `judge.judge_all_skills()` on the recovered
+  chunks - the full intended pipeline, not just the retrieval layer:**
+
+  | Skill | Static (current) score | Self-healing score | Judge's justification |
+  |---|---|---|---|
+  | Observability | 0 (no chunks retrieved) | **2** | "Chunk 3 demonstrates the skill applied to a real task through daily error monitoring, root-cause analysis..." - correctly cited chunk 6, the genuine evidence bullet |
+  | Reranking | 0 | 0 | "None of the provided chunks mention or demonstrate the use of reranking algorithms or techniques" |
+  | MLOps | 0 | 0 | "None of the provided chunks demonstrate MLOps practices such as model tracking, automated deployment pipelines, or model monitoring infrastructure" - matches the `eval/labeled_pairs.json` human label exactly |
+
+  All three outcomes now match expectation: `Observability` recovered
+  genuine evidence and was scored correctly, while `Reranking` and `MLOps`
+  were correctly rejected despite each having a superficially
+  plausible-looking chunk in their top-5 (the CLIP/Qdrant vector-search
+  chunk for `Reranking`, a generic extraction-pipeline chunk for `MLOps`) -
+  confirming the judge, given full chunk content and the actual skill name
+  together, succeeds at exactly the disambiguation that neither top-1
+  numeric metric could do reliably on its own. Notably, `Observability`'s
+  correct outcome held even though its own top-ranked chunk was still the
+  wrong one (the Playwright/Kafka bullet, per the finding above) - passing
+  the full top-5 (not just top-1) gave the judge enough surrounding context
+  to find and cite the right chunk anyway.
+- **Status:** Implemented and verified in `app/retrieval.py` /
+  `app/extraction.py`. Still not wired into `main.py`'s live `/analyze`
+  pipeline - that integration, plus a broader eval-set run (beyond these 3
+  hand-picked cases) to confirm no regression on skills the static search
+  already handles correctly, is the next step before shipping.
+
+- **Date:** 2026-08-29
+- **Issue:** Wire `search_with_fallback()` into `main.py`'s live
+  `/analyze` pipeline (`run_analysis()`) and run the full `eval/
+  labeled_pairs.json` set through `eval/run_eval.py`'s comparison logic to
+  confirm no regression before shipping.
+- **Bug caught before wiring in:** `search_with_fallback()` had no
+  short-circuit for an empty `evidence_index` (e.g. `github_index` when no
+  `github_username` is given - the common case). Without a guard, every
+  skill's github-side call would score 0 on an empty corpus, fall below
+  `MIN_RELEVANCE_SCORE`, and burn a `reformulate_query()` Gemini call
+  anyway - at ~15-19 skills per `/analyze` request against the 20-request/
+  day free-tier cap, wiring this in unguarded would have let a single
+  request exhaust the entire day's quota by itself. Fixed: added an
+  early-return in `search_with_fallback()` for `not evidence_index.chunks`,
+  skipping straight to the `github_index` fallback tier (if any) with no
+  `reformulate_query()` call.
+- **Integration:** `main.py`'s `run_analysis()` replaced its two direct
+  `resume_index.search(skill, ...)` / `github_index.search(skill, ...)`
+  calls with `search_with_fallback(skill, resume_index, ...)` /
+  `search_with_fallback(skill, github_index, ...)`, still merged via the
+  existing `merge_ranked_chunks()` - preserving the corpus-pollution-safe
+  dual-independent-index architecture (see the 2026-08-29 GitHub-evidence
+  entry above): each source still gets its own self-healing retry, and
+  results are only combined after scoring, never before.
+- **Eval run: hit the daily quota wall mid-run** on the first attempt
+  (`DailyQuotaExhaustedError` raised immediately and cleanly at the
+  baseline judge call, confirming the fail-fast fix from earlier today
+  works correctly under real use, not just a mocked test) - today's 20-
+  request budget had been fully spent by this session's cumulative testing.
+  Resumed after the user supplied a genuinely fresh API key (different
+  underlying project this time, confirmed via a working single-call smoke
+  test before spending it on the full eval).
+- **Method:** To isolate the retrieval-mechanism change from resume/JD
+  extraction's already-documented run-to-run non-determinism (see the
+  2026-08-28 entries above), `extract_resume_claims_and_evidence()` was
+  called ONCE and its result shared between two separate `judge_all_skills()`
+  runs - one using the old static `.search()` + merge (baseline), one using
+  `search_with_fallback()` + merge (updated) - against the same cached
+  `eval/job_skills.json` (18 skills: 15 required + 3 preferred).
+- **Raw result: 4 of 12 labeled skills changed score (2 apparent
+  regressions, 2 apparent improvements), baseline and updated tied at 9/12
+  label agreement.** Investigated each changed skill individually before
+  treating this as a real effect - re-ran retrieval alone (no judge call,
+  free) for `Computer Science`, `Software Deployment`, `Data Structures`,
+  and `RAG`, comparing `.search()` + merge against
+  `search_with_fallback()` + merge chunk-for-chunk, using the exact same
+  shared resume evidence:
+
+  | Skill | static chunks == fallback chunks? |
+  |---|---|
+  | Computer Science | **identical** |
+  | Software Deployment | **identical** |
+  | Data Structures | **identical** |
+  | RAG | **identical** |
+
+  All four are byte-identical. **None of the observed score changes are
+  caused by `search_with_fallback()` - they are pure judge non-determinism**
+  between the baseline and updated judge calls (two separate Gemini API
+  calls on identical input evidence), the same effect already documented in
+  the 2026-08-28 "re-running eval produces different results" entry above.
+  This was confirmed structurally, not just inferred: since the chunks sent
+  to the judge were provably identical, any score difference could only
+  come from the judge call itself.
+- **Why retrieval never actually differed on this eval set:** every one of
+  the 12 labeled skills' literal, system-extracted wording (from
+  `eval/job_skills.json`, e.g. `"ML Operations"`, not the abbreviated
+  `"MLOps"` used in the human label text) already cleared
+  `MIN_RELEVANCE_SCORE` on the literal search alone, so
+  `search_with_fallback()` took its early-return path and never invoked
+  `reformulate_query()` for any of them. Confirmed directly: literal `"ML
+  Operations"` scores 0.0320 (>= threshold, passes), while literal
+  `"MLOps"` (the exact string tested standalone in the entry above) scores
+  0.0315 (< threshold, triggers fallback) - same underlying skill, two
+  different literal strings, two different outcomes. **This eval run
+  proves no regression by construction** (retrieval is provably unchanged
+  for every skill it covers) but does not exercise the new fallback code
+  path at all - that exercise remains the standalone `Observability` /
+  `Reranking` / `MLOps` test from the entry above, which did trigger it and
+  produced 3/3 correct outcomes via the real judge.
+- **Conclusion:** No regression, confirmed at the retrieval level (stronger
+  than a judge-score comparison, since it rules out judge noise entirely).
+  No measurable change either, on this particular labeled set, since none
+  of its skills' literal wording falls below threshold - self-healing is a
+  no-op whenever the static search would already have succeeded, exactly as
+  designed. The demonstrated benefit remains the earlier `Observability`
+  recovery; this eval run's contribution is confirming that benefit doesn't
+  come at the cost of disturbing skills static search already handles.
+- **Status:** Shipped. `search_with_fallback()` is now live in `main.py`'s
+  `/analyze` pipeline for both the resume and GitHub evidence indexes.

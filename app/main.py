@@ -13,7 +13,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from app import extraction, github_evidence, judge, parsing
-from app.retrieval import EvidenceIndex, merge_ranked_chunks, skill_is_claimed
+from app.retrieval import EvidenceIndex, merge_ranked_chunks, search_with_fallback, skill_is_claimed
 
 app = FastAPI(title="Resume Reality Check")
 
@@ -72,9 +72,12 @@ def run_analysis(
 
     Resume and GitHub evidence are each indexed separately (their own BM25
     index and embeddings, built only from their own chunks) and searched
-    independently per skill; only the resulting ranked chunks are merged,
-    after scoring. This avoids corpus-pollution, where merging chunks from
-    both sources into one BM25 index before indexing lets one source's term
+    independently per skill via search_with_fallback() (self-healing: if a
+    skill's literal wording scores below MIN_RELEVANCE_SCORE against a
+    source, Gemini-reformulated alternates are tried before giving up on
+    that source); only the resulting ranked chunks are merged, after
+    scoring. This avoids corpus-pollution, where merging chunks from both
+    sources into one BM25 index before indexing lets one source's term
     statistics silently shift relevance scores for the other's evidence -
     see debugging-log.md."""
     resume_extraction = extraction.extract_resume_claims_and_evidence(resume_text)
@@ -106,8 +109,8 @@ def run_analysis(
             [
                 chunk
                 for chunk, _score in merge_ranked_chunks(
-                    resume_index.search(skill, top_k=TOP_K_CHUNKS),
-                    github_index.search(skill, top_k=TOP_K_CHUNKS),
+                    search_with_fallback(skill, resume_index, top_k=TOP_K_CHUNKS),
+                    search_with_fallback(skill, github_index, top_k=TOP_K_CHUNKS),
                 )
             ],
         )
