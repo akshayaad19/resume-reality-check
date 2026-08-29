@@ -21,12 +21,31 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=REPO_ROOT / ".env")
 
+from app import extraction
 from app.main import run_analysis
 from app.retrieval import _get_embedder
 
 LABELED_PAIRS_PATH = REPO_ROOT / "eval" / "labeled_pairs.json"
 RESUME_PATH = REPO_ROOT / "test_resume.txt"
 JD_PATH = REPO_ROOT / "test_jd.txt"
+JOB_SKILLS_CACHE_PATH = REPO_ROOT / "eval" / "job_skills.json"
+
+
+def _load_or_extract_job_skills(job_description: str) -> extraction.JobSkills:
+    """Load the cached JD skill extraction if present, else extract once and cache it.
+
+    extract_job_skills() is a live LLM call, and hosted LLM APIs don't guarantee
+    bit-identical outputs even at temperature=0 (serving-side batching, MoE
+    routing, etc.), so calling it fresh on every eval run makes the JD skill set
+    itself a source of run-to-run variance. Caching it here means repeated eval
+    runs compare against a fixed reference set, so score/claims differences
+    across runs reflect actual code changes rather than extraction randomness.
+    """
+    if JOB_SKILLS_CACHE_PATH.exists():
+        return extraction.JobSkills.model_validate_json(JOB_SKILLS_CACHE_PATH.read_text())
+    job_skills = extraction.extract_job_skills(job_description)
+    JOB_SKILLS_CACHE_PATH.write_text(job_skills.model_dump_json(indent=2))
+    return job_skills
 
 # extract_job_skills() is a live LLM call and re-splits/rewords skills
 # differently across runs (e.g. "Data structures and algorithms" -> separate
@@ -52,7 +71,8 @@ def main() -> None:
 
     resume_text = RESUME_PATH.read_text()
     job_description = JD_PATH.read_text()
-    result = run_analysis(resume_text, job_description)
+    job_skills = _load_or_extract_job_skills(job_description)
+    result = run_analysis(resume_text, job_description, job_skills=job_skills)
     system_by_skill = {row.skill: row for row in result.skills}
     current_skill_names = list(system_by_skill.keys())
 

@@ -4,7 +4,7 @@
 
 Most resume-matching tools compare keywords. This one separates what a candidate *claims* from what their actual experience *demonstrates*, using hybrid retrieval (keyword + semantic search) and an LLM-as-judge scored against a fixed rubric — then validates its own accuracy against a hand-labeled evaluation set.
 
-On my own resume, this system found that I claimed "Python" in my skills section, but **zero** of my evidence bullets described using it — because the language was only ever named in a project's tech-stack tag line, never in the bullet text itself. That single finding kicked off five real debugging investigations, documented below.
+On my own resume, this system found that I claimed "Python" in my skills section, but **zero** of my evidence bullets described using it — because the language was only ever named in a project's tech-stack tag line, never in the bullet text itself. That single finding kicked off six real debugging investigations, documented below.
 
 ---
 
@@ -110,6 +110,11 @@ Re-running the eval script with zero code changes produced different numbers eac
 **Fix:** Set `temperature=0` on all extraction and judge LLM calls, so the same input reliably produces the same output.
 **Why it matters beyond testing:** this affects the real product too — without it, a recruiter running the same resume twice could get different results between runs.
 
+**6. `temperature=0` reduced but did not eliminate non-determinism — traced to a deeper, unfixable infrastructure cause**
+Even with `temperature=0` on all three LLM calls, two consecutive eval runs still disagreed on 4 of 11 skills — one run's extracted skill set included "MLOps" but not "RAG"; the other included "RAG" but not "MLOps." Investigating further: this is a known, documented characteristic of hosted LLM APIs, not a bug in this codebase. Providers batch multiple users' requests together on shared infrastructure for efficiency; combined with Mixture-of-Experts routing (where only a subset of a model's specialized sub-networks handle any given request) and floating-point non-associativity (the order in which a computer sums numbers can produce tiny rounding differences), the *exact* probability distribution the model computes can vary slightly between otherwise-identical requests — occasionally enough to flip which token or expert is "most likely," even though `temperature=0` deterministically always selects the top-ranked option. This happens upstream of the model's own reasoning, at the routing/serving layer.
+**Mitigation:** Since this can't be fully eliminated, I isolated it instead — cached the job-description skill extraction (the step most affected, since skill-boundary decisions often sit at genuine ambiguity thresholds) to a file after the first run, so subsequent eval runs compare against a fixed, stable reference rather than a fresh, potentially-different extraction each time. The resume-side extraction still calls the API fresh each run; this is a known, accepted remaining source of minor variation, not yet mitigated.
+**Why this finding matters:** it's a real limit of building on hosted LLM infrastructure, not something more careful prompting or code can fully solve — the honest fix is to isolate and stabilize what you can (the eval process), rather than pursue perfect reproducibility that hosted APIs don't currently offer.
+
 ---
 
 ## Known limitations (stated honestly, not hidden)
@@ -118,6 +123,7 @@ Re-running the eval script with zero code changes produced different numbers eac
 - **In-memory indexing only.** No persistent vector database (e.g. Qdrant) — every request re-embeds the same evidence from scratch. Fine for a single resume at low volume; would need real indexing to scale.
 - **No GitHub evidence layer yet.** The original design includes verifying claims against a candidate's public GitHub activity (structural signals like Dockerfile/k8s presence, plus README/commit content) as a second, harder-to-fake evidence source. Not yet built.
 - **A single embedding-similarity threshold has a real, provable limit.** Diagnostic testing showed that topically-adjacent-but-distinct skills can score similarly to genuine paraphrases using cosine similarity alone — no single global threshold fully resolves this. A more robust fix would use an LLM to disambiguate borderline cases rather than relying purely on a numeric cutoff.
+- **Perfect reproducibility is not achievable with hosted LLM APIs.** `temperature=0` reduces but does not eliminate output variation, due to serving-side batching and Mixture-of-Experts routing effects outside the application's control. The job-skill extraction step is cached to stabilize evaluation; resume-side extraction still has minor run-to-run variation, unmitigated.
 - **No authentication, rate limiting, or deployment infrastructure yet.** This is a validated core pipeline, not a production system.
 
 ---

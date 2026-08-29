@@ -1,0 +1,24 @@
+{
+  "required_skills": [
+    "Computer Science",
+    "Software Development",
+    "Data Structures",
+    "Algorithms",
+    "Scalable System Design",
+    "AI Orchestration",
+    "RAG",
+    "Business Process Automation",
+    "Python",
+    "ML Operations",
+    "Software Testing",
+    "Software Deployment",
+    "Communication",
+    "Documentation",
+    "Collaboration"
+  ],
+  "preferred_skills": [
+    "Practical AI Application",
+    "Cloud Platforms",
+    "API-based Integrations"
+  ]
+}

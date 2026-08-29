@@ -21,6 +21,13 @@ MAX_RETRIES = 5
 _client: genai.Client | None = None
 
 
+class DailyQuotaExhaustedError(RuntimeError):
+    """Raised when a 429 is Gemini's daily request quota (not a per-minute
+    rate limit). Backoff-and-retry can't help here - the cap resets on a
+    calendar-day boundary, not within seconds - so retrying just burns
+    additional quota-counted requests for no benefit."""
+
+
 def _get_client() -> genai.Client:
     global _client
     if _client is None:
@@ -31,11 +38,41 @@ def _get_client() -> genai.Client:
     return _client
 
 
+def _quota_violations(error: genai_errors.ClientError) -> List[dict]:
+    """Extract the QuotaFailure violations (each with a quotaId) from a 429's
+    error body, e.g. {"error": {"details": [{"@type": "...QuotaFailure",
+    "violations": [{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier", ...}]}]}}."""
+    details = error.details if isinstance(error.details, dict) else {}
+    body = details.get("error", details)
+    violations = []
+    for detail in body.get("details", []) or []:
+        if str(detail.get("@type", "")).endswith("QuotaFailure"):
+            violations.extend(detail.get("violations", []) or [])
+    return violations
+
+
+def _is_daily_quota_error(error: genai_errors.ClientError) -> bool:
+    """True if this 429 is a per-day quota cap rather than a per-minute rate
+    limit, distinguished via the quotaId Gemini reports (e.g. ends in
+    "PerDay..." vs "PerMinute...")."""
+    return any(
+        "day" in str(v.get("quotaId", "")).lower()
+        for v in _quota_violations(error)
+    )
+
+
 def _generate_with_retry(client: genai.Client, **kwargs):
     for attempt in range(MAX_RETRIES):
         try:
             return client.models.generate_content(**kwargs)
         except genai_errors.ClientError as e:
+            if e.code == 429 and _is_daily_quota_error(e):
+                raise DailyQuotaExhaustedError(
+                    f"Gemini daily request quota exhausted for model {MODEL!r} - "
+                    "retrying won't help until the quota resets, so failing "
+                    f"immediately instead of retrying {MAX_RETRIES} times. "
+                    f"Original error: {e.message}"
+                ) from e
             if e.code == 429 and attempt < MAX_RETRIES - 1:
                 time.sleep(RATE_LIMIT_RETRY_DELAY_SECONDS)
                 continue

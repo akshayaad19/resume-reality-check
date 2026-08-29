@@ -78,6 +78,22 @@ class EvidenceIndex:
         return [(self.chunks[idx], score) for idx, score in fused]
 
 
+def merge_ranked_chunks(
+    *result_lists: List[Tuple[str, float]]
+) -> List[Tuple[str, float]]:
+    """Merge already-ranked (chunk, score) results from independent
+    EvidenceIndex.search() calls into one list, sorted by score descending.
+
+    Each input list's scores are RRF fusion scores computed entirely within
+    that source's own BM25/embedding index, so combining lists here - after
+    scoring is complete - never lets one source's corpus statistics (e.g.
+    BM25 term-rarity weights) influence another source's ranking. See
+    debugging-log.md for the corpus-pollution bug this guards against."""
+    merged = [item for result_list in result_lists for item in result_list]
+    merged.sort(key=lambda item: item[1], reverse=True)
+    return merged
+
+
 def skill_is_claimed(skill: str, claims: List[str]) -> bool:
     """True if any resume claim is semantically similar enough to the skill,
     via cosine similarity of all-MiniLM-L6-v2 embeddings (catches wording
