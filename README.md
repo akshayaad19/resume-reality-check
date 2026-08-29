@@ -4,7 +4,7 @@
 
 Most resume-matching tools compare keywords. This one separates what a candidate *claims* from what their actual experience *demonstrates*, using hybrid retrieval (keyword + semantic search) and an LLM-as-judge scored against a fixed rubric — then validates its own accuracy against a hand-labeled evaluation set.
 
-On my own resume, this system found that I claimed "Python" in my skills section, but **zero** of my evidence bullets described using it — because the language was only ever named in a project's tech-stack tag line, never in the bullet text itself. That single finding kicked off nine real debugging investigations, documented below.
+On my own resume, this system found that I claimed "Python" in my skills section, but **zero** of my evidence bullets described using it — because the language was only ever named in a project's tech-stack tag line, never in the bullet text itself. That single finding kicked off thirteen real debugging investigations, documented below — spanning retrieval precision, LLM infrastructure quirks, production deployment, and generalization across three different resumes.
 
 **Live demo:** [resume-reality-check-production.up.railway.app/docs](https://resume-reality-check-production.up.railway.app/docs) — first response can take up to ~2 minutes (multiple sequential LLM calls; see finding #9 for why this is deployed on Railway rather than Render).
 
@@ -39,45 +39,60 @@ Job Description ─────┘
          ┌──────────────────┴──────────────────┐
          ▼                                      ▼
   Resume: claims + evidence            JD: required + preferred skills
+  (achievements/certifications                  │
+   captured as evidence too — finding #12)       │
          │                                      │
          ▼                                      │
   EvidenceIndex (built once per request)        │
     - BM25 keyword index                        │
-    - sentence-transformer embeddings           │
-    (all-MiniLM-L6-v2, local, no API cost)       │
+    - ONNX Runtime embeddings                   │
+    (all-MiniLM-L6-v2, local, no API cost,      │
+     no PyTorch — finding #9)                    │
+         │                                      │
+  GitHub evidence (optional, if username given) │
+    - own separate EvidenceIndex (BM25 +        │
+      embeddings), so its corpus statistics     │
+      never mix with the resume's (finding #7)  │
+    - README prose (searched like any bullet)   │
+      + verified structural signals (Dockerfile,│
+      k8s/, CI, real dependency names parsed     │
+      from requirements.txt — finding #8),      │
+      structural signals rubric-weighted higher │
+      than prose since they're checkable         │
+      artifacts, not claims                      │
          │                                      │
          └──────────────◄───────────────────────┘
                 for each JD skill:
-                hybrid search (BM25 + semantic)
+                hybrid search (BM25 + semantic) on
+                resume index AND GitHub index,
+                merged only after each completes
                 → RRF fusion → top-k chunks
                 → minimum relevance threshold
-                (weak matches rejected, not forced)
                             │
+              ┌─────────────┴─────────────┐
+              ▼ above threshold            ▼ below threshold
+        proceed as-is             self-healing retrieval (finding #10):
+              │                   reformulate the query, retry search,
+              │                   pass reformulated top-5 candidates to
+              │                   the judge UNFILTERED (no second numeric
+              │                   gate — a threshold couldn't reliably
+              │                   separate real recoveries from noise,
+              │                   so the judge decides instead)
+              │                             │
+              └─────────────┬───────────────┘
                             ▼
               Batched LLM judge (Gemini, temperature=0)
               scores each skill 0-3 vs. a fixed rubric,
-              cites the chunk that justified the score
+              cites the chunk that justified the score.
+              Rubric penalizes generic, non-skill-specific
+              citations shared across multiple skills
+              (finding #11)
                             │
                             ▼
               claimed_on_resume: fuzzy semantic match
               (embedding similarity, threshold 0.50)
               against the claims list — independent of
               the score, used only for display
-                            │
-                            ▼
-              GitHub evidence (optional, if username given)
-              - fetched via GitHub REST API, own separate
-                EvidenceIndex (BM25 + embeddings), so its
-                corpus statistics never mix with the resume's
-              - two evidence types per repo: README prose
-                (searched like any evidence bullet) + verified
-                structural signals (Dockerfile, k8s/, CI
-                workflow, actual dependency names parsed from
-                requirements.txt/package.json) — structural
-                signals are rubric-weighted higher than prose,
-                since they're checkable artifacts, not claims
-              - results merged with resume results only AFTER
-                each source's own retrieval completes
                             │
                             ▼
                     Per-skill output table
@@ -101,7 +116,7 @@ Job Description ─────┘
 - `eval/run_eval.py` — automatically compares fresh pipeline output against these labels, reports agreement %
 - This is a fixed, read-only reference file; the eval script never modifies it. It's the "answer key" I check new code changes against.
 
-### Five real bugs found and fixed, in order
+### Thirteen real bugs found and fixed, in order
 
 **1. Evidence bullets didn't inherit their project's tech-stack context**
 Resume bullets like *"Developed the retrieval flow using CLIP embeddings and Qdrant vector search"* never literally say "Python" — even though the project header explicitly tags it. Before the fix, "Python" scored 0/3 despite being used in every project on the resume.
@@ -152,17 +167,42 @@ With memory, platform timeout, and client timeout all directly ruled out by meas
 **Resolution:** deployed the identical Docker image, unchanged, to Railway. The same request that reliably failed on Render completed successfully (200 OK, 114 seconds) on the first attempt. This cross-platform comparison is what confirms the failure was Render free-tier infrastructure behavior specifically (their own docs note free instances "might restart... at any time" for platform-side reasons) — not a bug in the application.
 **Why this finding matters:** four hypotheses, four real tests, three ruled out with hard evidence before accepting the real cause — and the final proof was empirical (same artifact, different platform, different outcome), not theoretical.
 
+**10. A relevance-threshold fix (finding #2) needed a smarter fallback: self-healing retrieval, and the first two attempts at it were wrong**
+Built "self-healing retrieval": if a skill's search score falls below the relevance threshold, reformulate the query and retry, accepting the retry only if it's a genuine improvement — not just any improvement, since noise alone could occasionally push a bad result above the same threshold. Tested against three deliberately chosen cases before trusting it: one that *should* recover (a real match hidden behind different wording), and two that *must not* recover (weak or nonexistent matches that would be false positives if "recovered").
+- *Attempt 1 — accept the retry if its RRF-fused score improves by some margin over the original attempt:* failed. The case that should recover had the *smallest* score improvement of the three — smaller than both cases that shouldn't recover. No margin value could ever separate them; the ordering itself was backwards for what a margin-based rule needs.
+- *Attempt 2 — same idea, but compare raw semantic-similarity scores instead of the RRF-fused score:* fixed the ordering, but a deeper check showed the genuinely correct evidence chunk still never ranked #1 under any phrasing tried — meaning "is the top-ranked chunk good" was never going to be reliable here, regardless of which score powers the comparison.
+- *Final approach:* stop trying to filter with a number at all. Pass the top-5 candidates from the reformulated query straight to the LLM judge, unfiltered, and let it decide relevance using full context — the same judgment call a numeric threshold was trying and failing to approximate.
+**Result:** all three test cases resolved correctly. The real match was recovered and correctly cited; both non-matches were correctly rejected, one of them (a superficially plausible chunk) exactly matching my own earlier hand-label.
+**Why this finding matters:** two structurally different scoring methods failed the same test in different ways, which is itself evidence that the problem wasn't "wrong number" but "wrong kind of decision to make with a number." Routing the decision to the component that can actually read and reason about content — instead of adding a third, more complicated number — was the fix.
+
+**11. Testing on two other people's resumes (not just my own) surfaced a systemic issue no amount of single-resume testing would have found: citation reuse across semantically adjacent skills**
+Ran the full pipeline against two additional real resumes with genuinely different writing styles and career domains (a finance/audit automation engineer, a backend/fintech engineer with competitive-programming credentials). On both, the same evidence bullet was independently cited as top evidence for multiple different, only loosely related skills — e.g. one webhook/deduplication bullet cited as strong evidence for both "Scalable system design" and "Workflow automation."
+**Root cause, isolated with a retrieval-only diagnostic (no LLM calls) across five skill pairs:** on a small evidence corpus (~13-16 chunks), BM25 finds almost no literal keyword overlap for abstract multi-word skill names, so ranking falls almost entirely to semantic similarity from a general-purpose small embedding model — which doesn't sharply separate skills that all sit in the same "technical engineering" neighborhood. A few generically technical-sounding chunks ended up appearing in the top-5 candidate pool for 4-5 different skills simultaneously. Each skill is judged independently, with no awareness of what other skills were just scored — so nothing prevented, or even noticed, the same chunk being credited repeatedly.
+**Fix:** added an explicit judge-side rubric rule — if the cited evidence is generically technical but doesn't specifically, distinctly support *this* skill versus being broadly relevant to several, score it lower rather than accepting it as strong, skill-specific proof.
+**Verified:** re-ran the same five previously-colliding skill pairs; each now cites distinct, more specific evidence (e.g. "Workflow automation" now cites a rules-engine bullet about classifying transactions, not the same webhook bullet used for "Scalable system design"), while a control skill that never had this problem scored identically before and after, confirming the fix didn't destabilize anything already correct.
+**Why this finding matters:** this is a design gap, not an implementation bug — the pipeline was built assuming each skill's evidence search is independent, a reasonable simplification that breaks down specifically when the evidence corpus is small relative to how many related skills are being scored. It was only found by testing on resumes different enough from my own to have a different skill mix and bullet density; it would not have been caught by more testing on a single resume.
+
+**12. A resume's Achievements/certifications section wasn't being captured as evidence at all**
+One test resume's strongest, most quantified evidence for "Data structures and algorithms" was a competitive-programming record (specific contest platform ratings and rankings) — sitting in an "Achievements" section, not under Experience or Projects. The system scored this skill 2/3, citing an unrelated engineering bullet, because the achievements section was never extracted as evidence in the first place.
+**Fix:** updated the resume extraction prompt to also capture quantified achievements/certifications content as evidence, not only work-experience and project bullets.
+**Verified:** the competitive-programming record is now correctly cited for "Algorithms." Notably, a closely related skill ("Data Structures" specifically) still correctly scored 0 — the judge distinguished that contest rankings prove algorithmic problem-solving without specifically demonstrating data-structure design or implementation, a more honest and differentiated read than either "credit both" or "credit neither" would have been.
+
+**13. Cross-resume testing expanded the eval set from 12 to 17 hand-labeled pairs, across three different resumes**
+Beyond the two fixes above, testing on these two additional resumes surfaced further disagreements consistent with the semantic-over-match pattern from finding #2 (e.g. database-optimization work over-credited toward "Data structures and algorithms" on a different resume's specific phrasing) — logged as labeled ground truth rather than immediately re-tuned, since not every disagreement has a clean, generalizable fix. This directly addresses what was, until now, the project's most-repeated caveat: a single-resume eval set can't demonstrate generalization. It still isn't exhaustive, but it's no longer single-resume.
+
 ---
 
 ## Known limitations (stated honestly, not hidden)
 
-- **Single-resume eval set.** 12 hand-labeled pairs, all from one resume against one JD. The methodology is sound; generalization to other resumes hasn't been tested yet.
+- **Eval set covers three resumes, not a large or representative sample.** 17 hand-labeled pairs across three real, deliberately different resumes (an AI/RAG engineer, a finance-automation engineer, a backend/fintech engineer). Meaningfully broader than a single-resume set, but still small — a production system would need a much larger, more systematically sampled labeled set.
 - **In-memory indexing only.** No persistent vector database (e.g. Qdrant) — every request re-embeds the same evidence from scratch. Fine for a single resume at low volume; would need real indexing to scale.
 - **GitHub evidence only sees public repos**, by design — this matches exactly what a human recruiter clicking a candidate's profile link would also see (private repos are invisible to both). A candidate's best work, if kept private, isn't captured.
 - **GitHub evidence's small corpus (a handful of repos) makes the relevance threshold less discriminating** than on the larger resume corpus — with only 3-4 documents, similarity scores cluster more tightly, so weak GitHub matches are less reliably filtered out than weak resume matches.
-- **A single embedding-similarity threshold has a real, provable limit.** Diagnostic testing showed that topically-adjacent-but-distinct skills can score similarly to genuine paraphrases using cosine similarity alone — no single global threshold fully resolves this. A more robust fix would use an LLM to disambiguate borderline cases rather than relying purely on a numeric cutoff.
+- **A single embedding-similarity threshold has a real, provable limit** for claims-matching specifically. Diagnostic testing showed that topically-adjacent-but-distinct skills can score similarly to genuine paraphrases using cosine similarity alone — no single global threshold fully resolves this for that use case.
+- **Citation over-reuse can still occur on very small, skill-dense evidence corpora.** Finding #11's fix is a judge-side rubric rule, not a structural guarantee like finding #7's — it reduces but doesn't architecturally eliminate the possibility of one chunk being credited toward multiple skills when the corpus is small enough relative to how many related skills are scored.
 - **Perfect reproducibility is not achievable with hosted LLM APIs.** `temperature=0` reduces but does not eliminate output variation, due to serving-side batching and Mixture-of-Experts routing effects outside the application's control. The job-skill extraction step is cached to stabilize evaluation; resume-side extraction still has minor run-to-run variation, unmitigated.
-- **Education/degree credentials aren't used as evidence at all.** Claims extraction only reads the resume's skills section; a relevant degree (e.g. a B.Tech in a CS-adjacent field) never becomes a claim or a piece of evidence, which can under-score fundamentals-related skills even when a relevant degree exists.
+- **Education/degree credentials still aren't used as evidence.** Claims extraction reads the skills section and (as of finding #12) achievements/certifications; a degree itself (e.g. a B.Tech in a CS-adjacent field) still never becomes a claim or evidence.
+- **"Documentation"-type skills scored from resume text alone can under-report real practice.** If a candidate's actual documentation (READMEs, wikis) lives on GitHub rather than being described in resume prose, the score without a GitHub username reflects only what the resume claims about itself, not the fuller picture.
 - **No authentication or rate limiting.** This is a validated pipeline with real deployment, not a hardened production system.
 
 ---
@@ -171,13 +211,11 @@ With memory, platform timeout, and client timeout all directly ruled out by meas
 
 - [x] ~~GitHub evidence layer~~ — done (finding #7, #8)
 - [x] ~~Deployment~~ — done (finding #9)
-- [ ] Self-healing multi-agent retrieval — if initial retrieval confidence is low, an agent reformulates the query and retries, or falls back to GitHub evidence, before giving up and reporting no evidence (a dynamic recovery strategy, replacing the current static reject-on-low-confidence approach)
-- [ ] Expand the eval set with 1–2 more resume/JD pairs to test generalization beyond a single resume
-- [ ] Minimal frontend (currently interact via FastAPI's auto-generated `/docs`)
+- [x] ~~Self-healing retrieval~~ — done (finding #10)
+- [x] ~~Expand the eval set beyond a single resume~~ — done (finding #11-13; 3 resumes, 17 pairs)
 - [ ] Persistent vector database (Qdrant) to replace in-memory indexing
-- [ ] MCP wrapper, so the scoring engine can be called directly as a tool from Claude Desktop/Code
 - [ ] Basic auth and rate limiting
-- [ ] Pull requirements.txt/education parsing improvements noted in Known Limitations
+- [ ] Grow the eval set further and explore a structural (not just rubric-level) fix for finding #11's citation-reuse pattern
 
 ---
 
