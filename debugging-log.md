@@ -191,3 +191,33 @@ Track issues found while running/testing resume-reality-check here.
   completed via the real `judge_all_skills` batched path without hitting the
   daily quota, confirming the retry-logic fix didn't need to trigger for a
   successful call to still work correctly end to end.
+
+- **Date:** 2026-08-29
+- **Issue:** The judge rubric had no explicit handling for GitHub structural
+  signals (`Dockerfile present`, `k8s/helm config present`, `CI workflow
+  present`, etc. - `app/github_evidence.py`'s `_detect_structural_signals`).
+  These are verified, checkable facts pulled directly from a repo's file
+  listing, not self-reported prose, but the original rubric only scored
+  based on descriptive detail ("what was built, done, or solved") - so a
+  skill backed only by a structural signal, with no sentence describing it,
+  had no clear path to a score above 0 or 1, undervaluing evidence that is
+  actually more trustworthy than prose (it can't be exaggerated the way a
+  bullet point can).
+- **Fix:** Added an explicit "Structural signal rule" section to `RUBRIC`
+  (`app/judge.py`), on top of the existing 0-3 levels: (1) prose evidence
+  AND a structural signal together for the same skill -> score 3 regardless
+  of what the prose alone would earn; (2) a structural signal alone, with no
+  descriptive prose anywhere in the provided chunks -> score at least 2,
+  never 0 or 1. The rubric also now instructs the judge to name which case
+  applied directly in its justification text.
+- **Verification:** Ran two live test cases through `judge_all_skills`
+  (batched, 1 Gemini call): (1) a single chunk with only
+  `"Structural signals found: Dockerfile present, CI workflow present"` and
+  no prose mentioning Docker anywhere -> scored 2, justification: "Structural
+  signal found (Dockerfile present) in repo infra-tools's file listing, no
+  descriptive text - scored 2 based on verified artifact alone." (2) the same
+  structural-signal chunk plus a prose bullet describing containerizing a
+  service with Docker -> scored 3, justification: "Structural signal
+  (Dockerfile present) AND descriptive text both confirm this skill - scored
+  3." Both match the new rule exactly, including citing the correct case in
+  the justification text.

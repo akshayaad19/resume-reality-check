@@ -90,6 +90,28 @@ some concrete detail (what was built, done, or solved).
 3 - Deep expertise: at least one chunk shows sustained, non-trivial use of the \
 skill with specific, measurable outcomes or impact (e.g. scale, performance, \
 ownership, results).
+
+Structural signal rule (apply on top of the levels above, before settling on a \
+final score):
+A "structural signal" is a verified, checkable artifact reported directly from a \
+repository's own file listing (e.g. "Dockerfile present", "k8s/helm config \
+present", "CI workflow present", "requirements.txt present") - it is a confirmed \
+fact about what exists in the repo, not a self-reported claim about what someone \
+did.
+- If a skill has BOTH descriptive prose evidence (a resume bullet or README \
+description that describes using the skill) AND a structural signal confirming \
+it, score 3, regardless of whether the prose alone would only reach "Applied" \
+level. A description plus a verified artifact together are the strongest \
+possible evidence.
+- If a skill has ONLY a structural signal for it, with no descriptive prose \
+mentioning that skill anywhere in the provided chunks, score at least 2 \
+("Applied") - never 0 or 1. A structural signal alone is a verified fact, not an \
+unverified claim, so it counts as real evidence on its own even without a \
+sentence describing how it was used.
+In the justification, state explicitly which case applies, e.g. "Structural \
+signal found (Dockerfile) in repo X's file listing, no descriptive text - scored \
+2 based on verified artifact alone" or "Structural signal (CI workflow) AND \
+descriptive README text both confirm this skill - scored 3."
 """
 
 SKILL_BLOCK_TEMPLATE = """\
