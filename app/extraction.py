@@ -10,6 +10,8 @@ from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel
 
+from app.judge import DailyQuotaExhaustedError, is_daily_quota_error
+
 MODEL = "gemini-3.6-flash"
 RATE_LIMIT_RETRY_DELAY_SECONDS = 15
 MAX_RETRIES = 5
@@ -32,6 +34,13 @@ def _generate_with_retry(client: genai.Client, **kwargs):
         try:
             return client.models.generate_content(**kwargs)
         except genai_errors.ClientError as e:
+            if e.code == 429 and is_daily_quota_error(e):
+                raise DailyQuotaExhaustedError(
+                    f"Gemini daily request quota exhausted for model {MODEL!r} - "
+                    "retrying won't help until the quota resets, so failing "
+                    f"immediately instead of retrying {MAX_RETRIES} times. "
+                    f"Original error: {e.message}"
+                ) from e
             if e.code == 429 and attempt < MAX_RETRIES - 1:
                 time.sleep(RATE_LIMIT_RETRY_DELAY_SECONDS)
                 continue

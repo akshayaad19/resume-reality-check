@@ -51,7 +51,7 @@ def _quota_violations(error: genai_errors.ClientError) -> List[dict]:
     return violations
 
 
-def _is_daily_quota_error(error: genai_errors.ClientError) -> bool:
+def is_daily_quota_error(error: genai_errors.ClientError) -> bool:
     """True if this 429 is a per-day quota cap rather than a per-minute rate
     limit, distinguished via the quotaId Gemini reports (e.g. ends in
     "PerDay..." vs "PerMinute...")."""
@@ -66,7 +66,7 @@ def _generate_with_retry(client: genai.Client, **kwargs):
         try:
             return client.models.generate_content(**kwargs)
         except genai_errors.ClientError as e:
-            if e.code == 429 and _is_daily_quota_error(e):
+            if e.code == 429 and is_daily_quota_error(e):
                 raise DailyQuotaExhaustedError(
                     f"Gemini daily request quota exhausted for model {MODEL!r} - "
                     "retrying won't help until the quota resets, so failing "

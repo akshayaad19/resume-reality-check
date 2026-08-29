@@ -381,3 +381,49 @@ Track issues found while running/testing resume-reality-check here.
   reverse proxy in front of it enforces - since 65-80s is well within
   Render's own 100-minute limit but could exceed a shorter client-side or
   browser fetch timeout.
+
+- **Date:** 2026-08-29
+- **Issue:** While attempting a fresh live `/analyze` run (to collect a
+  current list of zero-evidence skills for self-healing-retrieval test
+  planning), the request took 82.45s and then failed with a raw 500 instead
+  of the fast, clear `DailyQuotaExhaustedError` the daily-quota fix
+  (documented earlier in this log) was supposed to guarantee.
+- **Root cause:** The daily-quota fail-fast fix was only ever applied to
+  `judge.py`'s `_generate_with_retry` (used by `judge_all_skills`).
+  `extraction.py` has its own separate, near-identical `_generate_with_retry`
+  (used by `extract_resume_claims_and_evidence` and `extract_job_skills`)
+  that never got the same fix - it still retried every 429, daily-quota or
+  not, the old way (5 attempts x 15s sleep). The 82.45s duration matches
+  this exactly: ~75s of retry sleeps before the final attempt's raw
+  `google.genai.errors.ClientError: 429 RESOURCE_EXHAUSTED` (quotaId
+  `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, confirming a real,
+  currently-exhausted daily cap, not a transient rate limit) propagated
+  uncaught to a 500.
+- **Fix:** Moved `DailyQuotaExhaustedError` and the daily-vs-per-minute
+  quotaId check (renamed from the module-private `_is_daily_quota_error` to
+  the now cross-module `is_daily_quota_error`, since `extraction.py` imports
+  it from `judge.py` rather than duplicating it - keeping one exception type
+  and one detection function shared across both call sites instead of two
+  independent copies of the same logic) into a shared import:
+  `extraction.py` now does `from app.judge import DailyQuotaExhaustedError,
+  is_daily_quota_error` and applies the identical daily-quota check inside
+  its own `_generate_with_retry` before falling through to the existing
+  retry loop.
+- **Verification:** Could not reproduce against a second live daily-quota
+  exhaustion today (would require burning another day's cap just to test
+  the fix), so verified with a mocked `google.genai.errors.ClientError`
+  instead: (1) a daily-quota-shaped 429 (quotaId
+  `GenerateRequestsPerDayPerProjectPerModel-FreeTier`) now raises
+  `DailyQuotaExhaustedError` after exactly 1 call attempt and 0 retry
+  sleeps (down from 5 attempts / ~75s); (2) a per-minute-quota-shaped 429
+  (quotaId `GenerateRequestsPerMinutePerProjectPerModel-FreeTier`) still
+  retries with the existing 15s backoff and recovers on the next attempt,
+  confirming the fix only short-circuits the daily-cap case and doesn't
+  change behavior for genuine transient rate limits. Both `extraction.py`
+  and `judge.py` now import the same `DailyQuotaExhaustedError` class
+  (`extraction.DailyQuotaExhaustedError is judge.DailyQuotaExhaustedError`
+  -> `True`), so a caller can catch one exception type regardless of which
+  module's Gemini call hit the daily cap. Full live end-to-end confirmation
+  (a fresh `/analyze` run producing a current zero-evidence-skill list, the
+  original goal) is still blocked on the day's quota resetting or a new API
+  key.
