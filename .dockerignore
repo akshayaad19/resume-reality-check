@@ -1,0 +1,11 @@
+.git
+.env
+.venv
+__pycache__
+*.pyc
+eval
+test_resume.txt
+test_jd.txt
+analyze_output.txt
+debugging-log.md
+README.md

@@ -95,23 +95,48 @@ Structural signal rule (apply on top of the levels above, before settling on a \
 final score):
 A "structural signal" is a verified, checkable artifact reported directly from a \
 repository's own file listing (e.g. "Dockerfile present", "k8s/helm config \
-present", "CI workflow present", "requirements.txt present") - it is a confirmed \
-fact about what exists in the repo, not a self-reported claim about what someone \
-did.
+present", "CI workflow present") - it is a confirmed fact about what exists in \
+the repo, not a self-reported claim about what someone did. Only treat a \
+structural signal as evidence for the specific skill it corresponds to \
+(Dockerfile -> Docker/containerization, k8s/helm config -> Kubernetes, CI \
+workflow -> CI/CD) - never as generic confirmation for an unrelated skill just \
+because it happens to appear in the same repo's chunk.
 - If a skill has BOTH descriptive prose evidence (a resume bullet or README \
-description that describes using the skill) AND a structural signal confirming \
-it, score 3, regardless of whether the prose alone would only reach "Applied" \
-level. A description plus a verified artifact together are the strongest \
-possible evidence.
-- If a skill has ONLY a structural signal for it, with no descriptive prose \
-mentioning that skill anywhere in the provided chunks, score at least 2 \
+description that describes using the skill) AND a matching structural signal \
+confirming it, score 3, regardless of whether the prose alone would only reach \
+"Applied" level. A description plus a verified artifact together are the \
+strongest possible evidence.
+- If a skill has ONLY a matching structural signal for it, with no descriptive \
+prose mentioning that skill anywhere in the provided chunks, score at least 2 \
 ("Applied") - never 0 or 1. A structural signal alone is a verified fact, not an \
 unverified claim, so it counts as real evidence on its own even without a \
 sentence describing how it was used.
+
+Verified dependency lists: a chunk may include a line like "Verified \
+dependencies (from requirements.txt): fastapi, sentence-transformers, \
+rank-bm25, pydantic" or "Verified dependencies (from package.json): react, \
+express". These are parsed directly from a real dependency-management file, \
+typically machine-generated from what's actually installed (e.g. via `pip \
+freeze`), so an individual package name listed there is hard to fake and \
+counts as strong, specific evidence - but ONLY for a skill that specific \
+package actually names or directly implements (e.g. "sentence-transformers" \
+supports "embeddings" or "semantic search"; "fastapi" supports "REST APIs" or \
+"backend development"; "rank-bm25" supports "BM25" or "keyword search"; \
+"react" supports "frontend development"). Apply the same BOTH/ONLY rule above \
+using a matching package name in place of a structural signal - a package name \
+plus descriptive prose for the same skill scores 3, a matching package name \
+alone (no prose for that skill) scores at least 2. The mere presence of a \
+requirements.txt or package.json line - i.e. having *some* dependency list, \
+with no package name in it relevant to the skill being scored - is NOT \
+evidence for that skill, and must not be used to justify a score above what \
+the skill's own remaining evidence would earn on its own.
+
 In the justification, state explicitly which case applies, e.g. "Structural \
 signal found (Dockerfile) in repo X's file listing, no descriptive text - scored \
-2 based on verified artifact alone" or "Structural signal (CI workflow) AND \
-descriptive README text both confirm this skill - scored 3."
+2 based on verified artifact alone", "Structural signal (CI workflow) AND \
+descriptive README text both confirm this skill - scored 3", or "Verified \
+dependency 'sentence-transformers' in repo X's requirements.txt confirms this \
+skill - scored 2 based on the verified package alone."
 """
 
 SKILL_BLOCK_TEMPLATE = """\

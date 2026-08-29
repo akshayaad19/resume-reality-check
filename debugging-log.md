@@ -221,3 +221,48 @@ Track issues found while running/testing resume-reality-check here.
   (Dockerfile present) AND descriptive text both confirm this skill - scored
   3." Both match the new rule exactly, including citing the correct case in
   the justification text.
+
+- **Date:** 2026-08-29
+- **Issue:** A Docker deployment smoke test (real containerized `/analyze`
+  call, `test_resume.txt` + `test_jd.txt` + GitHub evidence) surfaced a
+  regression from the structural-signal rubric rule added earlier the same
+  day: `requirements.txt present` / `package.json present` were boolean
+  "file exists" signals with no information about what's actually in the
+  file, but the rubric treated any structural signal as confirming evidence
+  for whatever skill it happened to sit next to in a chunk. Combined with
+  the already-known small-GitHub-corpus retrieval issue (nearly every skill's
+  search returns all fetched repo chunks regardless of relevance), this meant
+  a generic `requirements.txt present` line was inflating unrelated skills
+  to score 3 - e.g. "Documentation skills" and "API-based integrations" both
+  cited "Structural signal (requirements.txt) AND descriptive README text
+  both confirm this skill - scored 3", even though a requirements.txt has
+  nothing to do with documentation or specific API integrations.
+- **Root cause:** `_detect_structural_signals` (`app/github_evidence.py`)
+  only checked whether `requirements.txt`/`package.json` existed at a repo's
+  top level, discarding the one piece of information that would make it
+  actually useful - which packages are listed inside it.
+- **Fix:** `app/github_evidence.py` now fetches and parses the real contents
+  of `requirements.txt` (`_parse_requirements_txt`, stripping comments,
+  version pins, extras, and environment markers) and `package.json`'s
+  `dependencies`/`devDependencies` (`_parse_package_json`), and includes the
+  actual package names in the evidence chunk as a clearly-labeled line, e.g.
+  `"Verified dependencies (from requirements.txt): fastapi, sentence-
+  transformers, rank-bm25, pydantic"` - distinguishable from README prose and
+  from the (now dependency-content-free) `Structural signals found: ...`
+  line. `RUBRIC` (`app/judge.py`) was updated to treat an individual listed
+  package name as strong evidence only for the specific skill it actually
+  implements (e.g. `fastapi` -> REST APIs/backend, `sentence-transformers` ->
+  embeddings/semantic search), and explicitly states that merely having *some*
+  dependency list, with no package name relevant to the skill being scored,
+  is not evidence for that skill.
+- **Verification:** Rebuilt the Docker image and re-ran the identical
+  containerized `/analyze` smoke test. Skills previously inflated by the
+  generic signal dropped to their genuinely-earned score with no dependency-
+  file mention at all (Documentation: 3 -> 2, justification now cites only
+  the README's own documentation content; RAG: 3 -> 2, justification now
+  cites only the resume's CLIP/Qdrant bullet). Skills with a real matching
+  package kept a high score but for a legitimate, specific reason instead of
+  a generic one - e.g. API-based integrations stayed at 3, now justified as
+  "Verified dependency 'fastapi' in requirements.txt AND descriptive README
+  text detailing building an API service both confirm this skill - scored 3
+  based on prose and verified package combined."

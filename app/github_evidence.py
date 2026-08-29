@@ -1,14 +1,17 @@
 """GitHub-backed evidence: turns a user's public repos into evidence chunks.
 
 Fetches recently updated public repos for a GitHub username, and for each one
-builds an evidence chunk (README + primary language + structural signals) in
-the same plain-text-bullet format as resume evidence, so it can be merged into
-the same EvidenceIndex and retrieved alongside resume bullets.
+builds an evidence chunk (README + primary language + verified dependencies +
+structural signals) in the same plain-text-bullet format as resume evidence,
+so it can be merged into the same EvidenceIndex and retrieved alongside
+resume bullets.
 """
 from __future__ import annotations
 
 import base64
+import json
 import os
+import re
 from typing import List, Optional
 
 import requests
@@ -17,6 +20,7 @@ GITHUB_API_BASE = "https://api.github.com"
 REQUEST_TIMEOUT_SECONDS = 10
 REPO_LIMIT = 10
 README_MAX_CHARS = 2000
+VERIFIED_DEPS_MAX_PACKAGES = 40
 
 
 class GitHubFetchError(Exception):
@@ -59,6 +63,15 @@ def _list_recent_repos(session: requests.Session, username: str) -> List[dict]:
     return response.json()[:REPO_LIMIT]
 
 
+def _decode_base64_file(data: dict) -> Optional[str]:
+    if not isinstance(data, dict) or data.get("encoding") != "base64" or not data.get("content"):
+        return None
+    try:
+        return base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+    except (ValueError, UnicodeDecodeError):
+        return None
+
+
 def _fetch_readme_text(session: requests.Session, owner: str, repo: str) -> Optional[str]:
     try:
         response = session.get(
@@ -69,14 +82,53 @@ def _fetch_readme_text(session: requests.Session, owner: str, repo: str) -> Opti
         return None
     if not response.ok:
         return None
-    data = response.json()
-    if data.get("encoding") != "base64" or not data.get("content"):
-        return None
+    text = _decode_base64_file(response.json())
+    return text.strip() if text else None
+
+
+def _fetch_file_text(session: requests.Session, owner: str, repo: str, path: str) -> Optional[str]:
     try:
-        decoded = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
-    except (ValueError, UnicodeDecodeError):
+        response = session.get(
+            f"{GITHUB_API_BASE}/repos/{owner}/{repo}/contents/{path}",
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+    except requests.RequestException:
         return None
-    return decoded.strip()
+    if not response.ok:
+        return None
+    return _decode_base64_file(response.json())
+
+
+def _parse_requirements_txt(text: str) -> List[str]:
+    """Extract package names from a requirements.txt, stripping comments,
+    version pins, extras, and environment markers, e.g.
+    "sentence-transformers==2.2.2" -> "sentence-transformers" and
+    "uvicorn[standard]>=0.20; python_version>='3.8'" -> "uvicorn"."""
+    packages = []
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].strip()
+        if not line or line.startswith(("-", "git+", "http://", "https://")):
+            continue
+        name = line.split(";", 1)[0]
+        name = re.split(r"[\[=<>!~\s]", name, 1)[0].strip()
+        if name:
+            packages.append(name)
+    return packages
+
+
+def _parse_package_json(text: str) -> List[str]:
+    """Extract dependency package names from package.json's "dependencies"
+    and "devDependencies" objects."""
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return []
+    packages = []
+    for key in ("dependencies", "devDependencies"):
+        deps = data.get(key) if isinstance(data, dict) else None
+        if isinstance(deps, dict):
+            packages.extend(deps.keys())
+    return packages
 
 
 def _fetch_top_level_contents(session: requests.Session, owner: str, repo: str) -> List[dict]:
@@ -133,11 +185,37 @@ def _detect_structural_signals(
         signals.append("k8s/helm config present")
     if _has_ci_workflows(session, owner, repo, top_level):
         signals.append("CI workflow present")
-    if ("requirements.txt", "file") in names_by_type:
-        signals.append("requirements.txt present")
-    if ("package.json", "file") in names_by_type:
-        signals.append("package.json present")
     return signals
+
+
+def _detect_verified_dependencies(
+    session: requests.Session, owner: str, repo: str, top_level: List[dict]
+) -> List[str]:
+    """Fetch and parse requirements.txt / package.json (when present at the
+    repo's top level) into their actual listed package names.
+
+    Unlike a boolean "file present" signal - which is too generic to confirm
+    any specific skill, since almost every Python/JS repo has one - the
+    individual package names inside these files are typically machine-
+    generated from what's actually installed (e.g. via `pip freeze`), making
+    them hard to fake and strong evidence for whatever skill a listed package
+    actually implements."""
+    names_by_type = {(entry.get("name"), entry.get("type")) for entry in top_level}
+    lines = []
+
+    if ("requirements.txt", "file") in names_by_type:
+        text = _fetch_file_text(session, owner, repo, "requirements.txt")
+        packages = _parse_requirements_txt(text)[:VERIFIED_DEPS_MAX_PACKAGES] if text else []
+        if packages:
+            lines.append(f"Verified dependencies (from requirements.txt): {', '.join(packages)}")
+
+    if ("package.json", "file") in names_by_type:
+        text = _fetch_file_text(session, owner, repo, "package.json")
+        packages = _parse_package_json(text)[:VERIFIED_DEPS_MAX_PACKAGES] if text else []
+        if packages:
+            lines.append(f"Verified dependencies (from package.json): {', '.join(packages)}")
+
+    return lines
 
 
 def _build_repo_evidence_chunk(session: requests.Session, owner: str, repo: dict) -> Optional[str]:
@@ -149,6 +227,7 @@ def _build_repo_evidence_chunk(session: requests.Session, owner: str, repo: dict
     readme_text = _fetch_readme_text(session, owner, repo_name)
     top_level = _fetch_top_level_contents(session, owner, repo_name)
     signals = _detect_structural_signals(session, owner, repo_name, top_level)
+    verified_deps = _detect_verified_dependencies(session, owner, repo_name, top_level)
 
     signals_summary = (
         f"Structural signals found: {', '.join(signals)}"
@@ -159,6 +238,7 @@ def _build_repo_evidence_chunk(session: requests.Session, owner: str, repo: dict
     parts = [f"Repo: {repo_name}", f"Primary language: {language}"]
     if readme_text:
         parts.append(f"README: {readme_text[:README_MAX_CHARS]}")
+    parts.extend(verified_deps)
     parts.append(signals_summary)
     return "\n".join(parts)
 
