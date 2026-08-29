@@ -1,26 +1,102 @@
 """Chunking, embedding, and hybrid (BM25 + semantic) retrieval over resume evidence."""
 from __future__ import annotations
 
+import os
 import re
 from collections import defaultdict
+from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
+import onnxruntime as ort
+import requests
 from rank_bm25 import BM25Okapi
-from sentence_transformers import SentenceTransformer
+from tokenizers import Tokenizer
 
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+# Embeddings run on ONNX Runtime + a standalone tokenizer rather than
+# sentence-transformers/PyTorch: importing torch + sentence-transformers adds
+# ~340MB of baseline RSS (measured), which alone exceeds the safety margin on
+# a 512MB deployment target. The ONNX export below is numerically equivalent
+# to the original PyTorch model (verified: cosine similarity 1.0 on held-out
+# text, byte-identical hybrid-search rankings on this project's test
+# queries) - see debugging-log.md.
+EMBEDDING_MODEL_REPO = "sentence-transformers/all-MiniLM-L6-v2"
+_ONNX_MODEL_URL = f"https://huggingface.co/{EMBEDDING_MODEL_REPO}/resolve/main/onnx/model.onnx"
+_TOKENIZER_URL = f"https://huggingface.co/{EMBEDDING_MODEL_REPO}/resolve/main/tokenizer.json"
+_MODEL_DIR = Path(os.environ.get(
+    "EMBEDDING_MODEL_DIR", str(Path(__file__).resolve().parent.parent / ".cache" / "embedding_model")
+))
+MAX_SEQ_LENGTH = 256
 RRF_K = 60
 MIN_RELEVANCE_SCORE = 0.0320
 CLAIM_MATCH_THRESHOLD = 0.50
 
-_embedder: SentenceTransformer | None = None
+
+def _download(url: str, dest: Path) -> None:
+    response = requests.get(url, timeout=60)
+    response.raise_for_status()
+    dest.write_bytes(response.content)
 
 
-def _get_embedder() -> SentenceTransformer:
+def _ensure_model_files() -> Tuple[Path, Path]:
+    """Downloads the ONNX model + tokenizer once and caches them under
+    _MODEL_DIR. In the Docker image these are pre-downloaded at build time
+    (see Dockerfile), so this is a no-op at runtime there; for local dev it
+    downloads on first use, same convenience sentence-transformers used to
+    provide."""
+    _MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    model_path = _MODEL_DIR / "model.onnx"
+    tokenizer_path = _MODEL_DIR / "tokenizer.json"
+    if not model_path.exists():
+        _download(_ONNX_MODEL_URL, model_path)
+    if not tokenizer_path.exists():
+        _download(_TOKENIZER_URL, tokenizer_path)
+    return model_path, tokenizer_path
+
+
+class _OnnxEmbedder:
+    """all-MiniLM-L6-v2 via ONNX Runtime, replicating sentence-transformers'
+    own mean-pooling + L2-normalization so outputs match the original
+    PyTorch-based pipeline (see the module docstring note above)."""
+
+    def __init__(self) -> None:
+        model_path, tokenizer_path = _ensure_model_files()
+        self._tokenizer = Tokenizer.from_file(str(tokenizer_path))
+        self._tokenizer.enable_truncation(max_length=MAX_SEQ_LENGTH)
+        self._tokenizer.enable_padding(
+            pad_id=self._tokenizer.token_to_id("[PAD]"), pad_token="[PAD]"
+        )
+        self._session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+
+    def encode(self, texts: List[str], normalize_embeddings: bool = True) -> np.ndarray:
+        encodings = self._tokenizer.encode_batch(list(texts))
+        input_ids = np.array([e.ids for e in encodings], dtype=np.int64)
+        attention_mask = np.array([e.attention_mask for e in encodings], dtype=np.int64)
+        token_type_ids = np.array([e.type_ids for e in encodings], dtype=np.int64)
+        (last_hidden_state,) = self._session.run(
+            None,
+            {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "token_type_ids": token_type_ids,
+            },
+        )
+        mask = attention_mask[..., None].astype(np.float32)
+        summed = (last_hidden_state * mask).sum(axis=1)
+        counts = np.clip(mask.sum(axis=1), a_min=1e-9, a_max=None)
+        embeddings = summed / counts
+        if normalize_embeddings:
+            embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+        return embeddings
+
+
+_embedder: _OnnxEmbedder | None = None
+
+
+def _get_embedder() -> _OnnxEmbedder:
     global _embedder
     if _embedder is None:
-        _embedder = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        _embedder = _OnnxEmbedder()
     return _embedder
 
 

@@ -3,33 +3,33 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    HF_HOME=/app/.cache/huggingface
+    EMBEDDING_MODEL_DIR=/app/.cache/embedding_model
 
 WORKDIR /app
 
-# libgomp1 is required at runtime by the CPU build of torch (sentence-transformers'
-# dependency) - without it, importing torch fails on slim/minimal base images.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY requirements.txt .
 
-# Install the CPU-only torch build first so sentence-transformers' dependency
-# resolution is satisfied by it instead of pulling the much larger default
-# CUDA build - this app has no GPU in its deploy target.
-RUN pip install --index-url https://download.pytorch.org/whl/cpu torch && \
-    pip install -r requirements.txt
+RUN pip install -r requirements.txt
 
-# Pre-download and cache the embedding model at build time, so it ships baked
-# into the image instead of being fetched from the Hugging Face Hub on the
-# first request - avoids a slow (and rate-limited) cold start in production.
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-
-# The model above is already cached in the image, so block any further
-# Hugging Face Hub network calls at runtime rather than merely avoiding them.
-ENV HF_HUB_OFFLINE=1 \
-    TRANSFORMERS_OFFLINE=1
+# Pre-download and cache the ONNX embedding model + tokenizer at build time,
+# so they ship baked into the image instead of being fetched over the network
+# on the first request - avoids a slow cold start in production. Embeddings
+# run on ONNX Runtime rather than sentence-transformers/PyTorch: importing
+# torch + sentence-transformers adds ~340MB of baseline memory (measured),
+# which alone left no safety margin on a 512MB deployment target - see
+# debugging-log.md.
+RUN mkdir -p "$EMBEDDING_MODEL_DIR" && \
+    python - <<'PYEOF'
+import os, urllib.request
+repo = "sentence-transformers/all-MiniLM-L6-v2"
+model_dir = os.environ["EMBEDDING_MODEL_DIR"]
+files = {
+    "model.onnx": f"https://huggingface.co/{repo}/resolve/main/onnx/model.onnx",
+    "tokenizer.json": f"https://huggingface.co/{repo}/resolve/main/tokenizer.json",
+}
+for name, url in files.items():
+    urllib.request.urlretrieve(url, os.path.join(model_dir, name))
+PYEOF
 
 COPY app ./app
 

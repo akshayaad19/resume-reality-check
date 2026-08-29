@@ -266,3 +266,62 @@ Track issues found while running/testing resume-reality-check here.
   "Verified dependency 'fastapi' in requirements.txt AND descriptive README
   text detailing building an API service both confirm this skill - scored 3
   based on prose and verified package combined."
+
+- **Date:** 2026-08-29
+- **Issue:** In production on Render's free tier, a `POST /analyze` request
+  (resume + JD + `github_username`) returned a 502. Render's logs showed the
+  server process restarting mid-request ("Detected a new open port",
+  "Started server process [1]" reappearing), consistent with the platform
+  OOM-killing and restarting the container - Render's free tier caps memory
+  at 512MB.
+- **Root cause (confirmed, not assumed):** Reproduced the exact failure by
+  running the (pre-fix) Docker image with `--memory=512m --memory-swap=512m`
+  (Render's exact cap). Got a real, confirmed OOM kill
+  (`OOMKilled=true`, exit 137) under modest extra memory pressure; a single
+  `/analyze` call alone already used 454.8MB/512MB (89%), and the container
+  briefly touched 507MB (99%) at idle startup - essentially zero headroom.
+  An import-by-import measurement (`/proc/self/status` VmRSS in an isolated
+  process) isolated the cause: `import torch` alone costs +176MB RSS, and
+  `import sentence_transformers` (before loading any model) costs another
+  +161MB - ~340MB of baseline memory before a single request or GitHub API
+  call happens. Capping torch's thread pool (`OMP_NUM_THREADS=1` etc.) was
+  tested and made no measurable difference. GitHub evidence fetching was
+  ruled out as a contributor - each chunk is capped at ~2KB, negligible next
+  to the ~450MB baseline.
+- **Fix:** Replaced the sentence-transformers/PyTorch embedding backend in
+  `app/retrieval.py` with ONNX Runtime + the standalone `tokenizers` library,
+  using the pre-converted `onnx/model.onnx` export already published in the
+  `sentence-transformers/all-MiniLM-L6-v2` HF repo (fp32, not quantized - no
+  precision tradeoff). `_OnnxEmbedder` replicates sentence-transformers' own
+  mean-pooling (attention-mask-weighted average of token embeddings) +
+  L2-normalization by hand, and keeps the exact same `_get_embedder()` /
+  `.encode(texts, normalize_embeddings=...)` interface the rest of the
+  codebase (including `eval/run_eval.py`) already depends on, so no other
+  file needed to change. `requirements.txt` drops `sentence-transformers`
+  (and, transitively, `torch`) for `onnxruntime` + `tokenizers`. The
+  Dockerfile now downloads `model.onnx` + `tokenizer.json` directly at build
+  time (plain `urllib.request`, no heavy client library needed) instead of
+  installing CPU torch and invoking `sentence_transformers.SentenceTransformer`.
+- **Verification (before implementing further):** (1) Raw embedding
+  equivalence - cosine similarity of 1.00000 between the old and new
+  backends across 9 held-out test sentences including "Kubernetes" and real
+  evidence-chunk text. (2) Full hybrid-search (BM25+semantic+RRF) ranking
+  equivalence - ran the actual `app.retrieval.EvidenceIndex` (now
+  ONNX-backed) against a fresh sentence-transformers baseline built
+  independently, over the real resume+GitHub evidence set, for 8 real
+  project queries ("Kubernetes", "Software Deployment", "RAG",
+  "Documentation", "Python", "Communication", "Algorithms", "API-based
+  integrations") - identical top-5 chunk order and RRF scores matching to
+  4 decimal places on every query. Only after both checks passed cleanly was
+  the Docker image rebuilt and requirements/Dockerfile changed.
+- **Result:** Image size dropped 2.2GB -> 701MB. Import-by-import RSS:
+  `onnxruntime` +17.5MB and `tokenizers` +3.2MB (vs. torch's +176MB and
+  sentence-transformers' +161MB); loading the ONNX model + running inference
+  add ~135MB more, for a ~212MB steady-state total (vs. ~494MB before) - a
+  ~57% reduction. Idle memory under the same `--memory=512m` cap dropped
+  from 387-507MB to 84.7MB (17%), since the model now loads lazily on first
+  request instead of `import`-time. A real `/analyze` call (resume + JD +
+  GitHub evidence) under the same 512MB cap peaked at 256.8MB (50%) - half
+  the previous 454.8MB (89%) - and a second consecutive call only added
+  ~15MB, confirming no unbounded growth. No OOM kill; container stayed
+  healthy through both requests.

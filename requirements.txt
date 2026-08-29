@@ -4,7 +4,8 @@ python-multipart
 google-genai
 python-dotenv
 pypdf
-sentence-transformers
+onnxruntime
+tokenizers
 rank-bm25
 numpy
 pydantic

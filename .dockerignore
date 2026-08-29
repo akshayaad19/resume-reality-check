@@ -1,6 +1,7 @@
 .git
 .env
 .venv
+.cache
 __pycache__
 *.pyc
 eval
