@@ -4,7 +4,9 @@
 
 Most resume-matching tools compare keywords. This one separates what a candidate *claims* from what their actual experience *demonstrates*, using hybrid retrieval (keyword + semantic search) and an LLM-as-judge scored against a fixed rubric — then validates its own accuracy against a hand-labeled evaluation set.
 
-On my own resume, this system found that I claimed "Python" in my skills section, but **zero** of my evidence bullets described using it — because the language was only ever named in a project's tech-stack tag line, never in the bullet text itself. That single finding kicked off six real debugging investigations, documented below.
+On my own resume, this system found that I claimed "Python" in my skills section, but **zero** of my evidence bullets described using it — because the language was only ever named in a project's tech-stack tag line, never in the bullet text itself. That single finding kicked off nine real debugging investigations, documented below.
+
+**Live demo:** [resume-reality-check-production.up.railway.app/docs](https://resume-reality-check-production.up.railway.app/docs) — first response can take up to ~2 minutes (multiple sequential LLM calls; see finding #9 for why this is deployed on Railway rather than Render).
 
 ---
 
@@ -63,10 +65,25 @@ Job Description ─────┘
               the score, used only for display
                             │
                             ▼
+              GitHub evidence (optional, if username given)
+              - fetched via GitHub REST API, own separate
+                EvidenceIndex (BM25 + embeddings), so its
+                corpus statistics never mix with the resume's
+              - two evidence types per repo: README prose
+                (searched like any evidence bullet) + verified
+                structural signals (Dockerfile, k8s/, CI
+                workflow, actual dependency names parsed from
+                requirements.txt/package.json) — structural
+                signals are rubric-weighted higher than prose,
+                since they're checkable artifacts, not claims
+              - results merged with resume results only AFTER
+                each source's own retrieval completes
+                            │
+                            ▼
                     Per-skill output table
 ```
 
-**Tech stack:** FastAPI · Gemini (gemini-3.6-flash) · sentence-transformers · rank-bm25 · Pydantic structured outputs
+**Tech stack:** FastAPI · Gemini (gemini-3.6-flash) · ONNX Runtime (embeddings) · rank-bm25 · Pydantic structured outputs · Docker · deployed on Railway
 
 ---
 
@@ -115,37 +132,65 @@ Even with `temperature=0` on all three LLM calls, two consecutive eval runs stil
 **Mitigation:** Since this can't be fully eliminated, I isolated it instead — cached the job-description skill extraction (the step most affected, since skill-boundary decisions often sit at genuine ambiguity thresholds) to a file after the first run, so subsequent eval runs compare against a fixed, stable reference rather than a fresh, potentially-different extraction each time. The resume-side extraction still calls the API fresh each run; this is a known, accepted remaining source of minor variation, not yet mitigated.
 **Why this finding matters:** it's a real limit of building on hosted LLM infrastructure, not something more careful prompting or code can fully solve — the honest fix is to isolate and stabilize what you can (the eval process), rather than pursue perfect reproducibility that hosted APIs don't currently offer.
 
+**7. Merging GitHub evidence into the resume's search index silently broke unrelated resume-only scores (BM25 corpus pollution)**
+After adding GitHub evidence, five skills that previously had correct, well-evidenced resume-only scores (e.g. "Collaboration," "Cloud platforms") dropped to 0 with no cited evidence — even though nothing about the resume itself changed. Root cause: BM25's term weighting is computed relative to the *entire* corpus it's searching. Merging 3-4 GitHub chunks into the same pool as the 13 resume chunks shifted the corpus-wide word-rarity statistics for every query, including ones that had nothing to do with GitHub — pushing some previously-fine resume scores just below the relevance threshold from finding #2.
+**Fix:** Build two fully separate `EvidenceIndex` objects — one for resume evidence, one for GitHub evidence — each with its own independent BM25 corpus. Search each independently, then merge only the already-ranked *results* afterward, never the raw chunks. This guarantees, by construction, that one source's statistics can never influence the other's scoring.
+**Verified:** for all 18 job skills, resume-only retrieval now returns byte-identical results whether or not GitHub evidence is present alongside it — checked structurally, not just observed once.
+
+**8. A generic "requirements.txt exists" signal was treated as strong evidence for unrelated skills**
+The structural-signal rubric rule (any structural signal + descriptive prose → score 3) didn't check whether the signal was topically relevant to the specific skill being scored. Since `requirements.txt` exists in nearly every Python repo, it was inflating scores for "Documentation" and "API-based integrations" — skills that have nothing to do with having a dependency file.
+**Fix:** Instead of a boolean "does requirements.txt exist" check, parse its actual contents and surface the specific package names found (e.g. "Verified dependencies: fastapi, sentence-transformers"). The rubric now only credits a *specific matching package name* as strong evidence (e.g. `fastapi` → "REST APIs"), not the file's mere existence. This is also a better signal in principle: dependency files are typically auto-generated (`pip freeze`), making the package list itself harder to fake than prose.
+**Result:** previously-inflated scores dropped to correct levels with no file-existence claim; genuine matches (e.g. Python confirmed via `fastapi`/`pydantic` in a real requirements.txt) kept their score, now for the right, specific reason.
+
+**9. Free-tier hosting killed long-running requests mid-flight — root-caused across four ruled-out theories before finding the real one**
+Deployed to Render's free tier; `/analyze` calls (which make several sequential Gemini calls, 65-115s total) intermittently returned 502s. Investigated four hypotheses in order, each with real measurements, not guesses:
+- *Memory (OOM)* — genuinely was the cause initially (idle memory sat at 507/512MB, 99%, just from importing PyTorch + sentence-transformers). **Fixed** by replacing the sentence-transformers/PyTorch embedding stack with ONNX Runtime running the same model (`all-MiniLM-L6-v2`) — same weights, same architecture, lighter execution engine. Verified retrieval rankings were unaffected (identical top-5 order and RRF scores to 4 decimal places across 8 real queries) before trusting the memory numbers. Idle memory dropped to 17%; peak under full load dropped to ~50%.
+- *Render's platform timeout* — ruled out; Render's own docs state free-tier HTTP requests may run up to 100 minutes, far beyond any observed request duration.
+- *Swagger UI's client-side timeout* — ruled out by calling `/analyze` with `curl` directly (no browser/Swagger UI involved) and an explicit generous `--max-time`; the request completed cleanly in ~79s with a well-formed response.
+- *Memory regression after the ONNX fix* — re-measured under the exact same 512MB constraint with the current deployed code; idle and peak usage were statistically unchanged from the post-fix baseline. Memory was not the cause of this second round of failures.
+With memory, platform timeout, and client timeout all directly ruled out by measurement, added request-duration logging middleware and confirmed via Render's own logs that failing requests died mid-flight (no completion line ever logged) shortly after the first LLM call started — not a graceful timeout, an abrupt kill.
+**Resolution:** deployed the identical Docker image, unchanged, to Railway. The same request that reliably failed on Render completed successfully (200 OK, 114 seconds) on the first attempt. This cross-platform comparison is what confirms the failure was Render free-tier infrastructure behavior specifically (their own docs note free instances "might restart... at any time" for platform-side reasons) — not a bug in the application.
+**Why this finding matters:** four hypotheses, four real tests, three ruled out with hard evidence before accepting the real cause — and the final proof was empirical (same artifact, different platform, different outcome), not theoretical.
+
 ---
 
 ## Known limitations (stated honestly, not hidden)
 
 - **Single-resume eval set.** 12 hand-labeled pairs, all from one resume against one JD. The methodology is sound; generalization to other resumes hasn't been tested yet.
 - **In-memory indexing only.** No persistent vector database (e.g. Qdrant) — every request re-embeds the same evidence from scratch. Fine for a single resume at low volume; would need real indexing to scale.
-- **No GitHub evidence layer yet.** The original design includes verifying claims against a candidate's public GitHub activity (structural signals like Dockerfile/k8s presence, plus README/commit content) as a second, harder-to-fake evidence source. Not yet built.
+- **GitHub evidence only sees public repos**, by design — this matches exactly what a human recruiter clicking a candidate's profile link would also see (private repos are invisible to both). A candidate's best work, if kept private, isn't captured.
+- **GitHub evidence's small corpus (a handful of repos) makes the relevance threshold less discriminating** than on the larger resume corpus — with only 3-4 documents, similarity scores cluster more tightly, so weak GitHub matches are less reliably filtered out than weak resume matches.
 - **A single embedding-similarity threshold has a real, provable limit.** Diagnostic testing showed that topically-adjacent-but-distinct skills can score similarly to genuine paraphrases using cosine similarity alone — no single global threshold fully resolves this. A more robust fix would use an LLM to disambiguate borderline cases rather than relying purely on a numeric cutoff.
 - **Perfect reproducibility is not achievable with hosted LLM APIs.** `temperature=0` reduces but does not eliminate output variation, due to serving-side batching and Mixture-of-Experts routing effects outside the application's control. The job-skill extraction step is cached to stabilize evaluation; resume-side extraction still has minor run-to-run variation, unmitigated.
-- **No authentication, rate limiting, or deployment infrastructure yet.** This is a validated core pipeline, not a production system.
+- **Education/degree credentials aren't used as evidence at all.** Claims extraction only reads the resume's skills section; a relevant degree (e.g. a B.Tech in a CS-adjacent field) never becomes a claim or a piece of evidence, which can under-score fundamentals-related skills even when a relevant degree exists.
+- **No authentication or rate limiting.** This is a validated pipeline with real deployment, not a hardened production system.
 
 ---
 
 ## Planned next
 
-- [ ] GitHub evidence layer — verify claims against public repos (structural checks: Dockerfile, k8s manifests, CI configs; textual checks: README/commit content via the same hybrid retrieval pipeline)
+- [x] ~~GitHub evidence layer~~ — done (finding #7, #8)
+- [x] ~~Deployment~~ — done (finding #9)
 - [ ] Self-healing multi-agent retrieval — if initial retrieval confidence is low, an agent reformulates the query and retries, or falls back to GitHub evidence, before giving up and reporting no evidence (a dynamic recovery strategy, replacing the current static reject-on-low-confidence approach)
 - [ ] Expand the eval set with 1–2 more resume/JD pairs to test generalization beyond a single resume
 - [ ] Minimal frontend (currently interact via FastAPI's auto-generated `/docs`)
 - [ ] Persistent vector database (Qdrant) to replace in-memory indexing
 - [ ] MCP wrapper, so the scoring engine can be called directly as a tool from Claude Desktop/Code
-- [ ] Basic auth, rate limiting, deployment (Docker, hosted)
+- [ ] Basic auth and rate limiting
+- [ ] Pull requirements.txt/education parsing improvements noted in Known Limitations
 
 ---
 
 ## Try it
 
-Currently runs locally / via Codespace — interactive API docs at `/docs` after starting the server:
+**Live:** [resume-reality-check-production.up.railway.app/docs](https://resume-reality-check-production.up.railway.app/docs) — upload a resume, paste a job description, optionally add a GitHub username. First response takes up to ~2 minutes (several sequential LLM calls, no caching between requests yet).
 
+**Locally:**
 ```bash
 uvicorn app.main:app --reload
 ```
-
-*(Live deployed demo link — coming soon.)*
+or via Docker:
+```bash
+docker build -t resume-reality-check .
+docker run -p 8000:8000 --env-file .env resume-reality-check
+```
