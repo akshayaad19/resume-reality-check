@@ -325,3 +325,59 @@ Track issues found while running/testing resume-reality-check here.
   the previous 454.8MB (89%) - and a second consecutive call only added
   ~15MB, confirming no unbounded growth. No OOM kill; container stayed
   healthy through both requests.
+
+- **Date:** 2026-08-29
+- **Issue:** A separate production 502/restart was reported after the ONNX
+  fix above, and it wasn't clear whether it was a repeat of the earlier OOM
+  (memory creeping back up since the fix) or a genuinely different failure
+  mode, e.g. the request simply taking too long. Investigated two angles:
+  (1) whether the app records exact per-request duration anywhere, and (2)
+  whether Render's free-tier request timeout is a fixed platform limit or
+  something we could tune.
+- **Finding (duration visibility):** `app/main.py` had no request timing
+  instrumentation at all - no middleware, no per-request logging - so there
+  was no way to get an exact duration for the request that preceded the
+  restart, only a rough bound from diffing Render's log timestamps around
+  the restart event. Added a `@app.middleware("http")` handler
+  (`log_request_duration`) that logs elapsed ms per request on completion.
+  First attempt logged via `logging.getLogger("uvicorn.access")`, which
+  crashed uvicorn's `AccessFormatter` (`ValueError: not enough values to
+  unpack`) because that formatter expects uvicorn's own 5-tuple access-log
+  args, not a plain message - caught by uvicorn so it didn't take down the
+  request, but the log line was corrupted. Second attempt used a fresh
+  `logging.getLogger("app.timing")`, which produced no output at all (Python
+  root logger has no handler by default, and uvicorn only wires handlers to
+  its own `uvicorn`/`uvicorn.error`/`uvicorn.access` loggers). Fixed by
+  logging to `uvicorn.error` (uvicorn's general-purpose log channel, despite
+  the name - already has an INFO-level handler with a plain `DefaultFormatter`
+  wired up), verified end-to-end in a container: `INFO:     POST /analyze
+  completed in 65647ms` printed cleanly. Deliberate tradeoff: this only logs
+  on completion, so a request that dies mid-flight (OOM kill, crash) never
+  produces the "completed" line - that absence, cross-referenced against
+  Render's platform-level "request started" log line, is itself the
+  crash-vs-timeout signal going forward.
+- **Finding (Render timeout policy):** Per Render's own docs, HTTP requests
+  may run up to 100 minutes - a fixed platform ceiling, not a per-service
+  configurable setting, and far above any observed `/analyze` duration.
+  Render's Free tier docs separately state "Render might restart a Free web
+  service at any time," i.e. free-tier restarts aren't necessarily tied to
+  any single request's duration at all.
+- **Finding (memory re-check):** Rebuilt the current image and re-ran the
+  identical `--memory=512m --memory-swap=512m` test from the OOM
+  investigation above: idle RSS 73.97MB (14.45%, vs. 84.7MB/17% previously -
+  consistent within noise), and a real `/analyze` call (resume + full
+  `test_jd.txt`, ~30 skills + GitHub evidence) peaked at 232-257MiB
+  (45-50%), matching the prior 256.8MB (50%) measurement almost exactly.
+  **Memory has not crept back up** - the ONNX fix is holding, and this rules
+  out OOM as the cause of the new restart.
+- **Observation worth following up:** the two live `/analyze` runs against
+  the full `test_jd.txt` (a JD with ~30 required/preferred skills, notably
+  larger than earlier test runs) took 65.6s and 80.5s end-to-end - all
+  Gemini-call time (extraction + batched judge), not memory pressure. Not
+  yet confirmed as the restart's cause, but worth checking next: whether the
+  specific JD/resume pair that triggered the restart was unusually large,
+  and whether Render's free-tier CPU throttling (not just its memory cap)
+  could be stretching a normally-fast call past whatever the client or a
+  reverse proxy in front of it enforces - since 65-80s is well within
+  Render's own 100-minute limit but could exceed a shorter client-side or
+  browser fetch timeout.

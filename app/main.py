@@ -1,13 +1,15 @@
 """FastAPI app: resume + job description in, per-skill evidence-depth table out."""
 from __future__ import annotations
 
+import logging
+import time
 from typing import List, Optional
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from app import extraction, github_evidence, judge, parsing
@@ -15,7 +17,26 @@ from app.retrieval import EvidenceIndex, merge_ranked_chunks, skill_is_claimed
 
 app = FastAPI(title="Resume Reality Check")
 
+logger = logging.getLogger("uvicorn.error")
+
 TOP_K_CHUNKS = 5
+
+
+@app.middleware("http")
+async def log_request_duration(request: Request, call_next):
+    """Logs elapsed time for each request, on completion.
+
+    Only fires if the request finishes (success or handled error) - a
+    process that dies mid-request (OOM kill, crash) never reaches the log
+    line below, so its absence in the logs is itself the crash-vs-timeout
+    signal: Render's platform-level request log shows the request started,
+    but no "completed" line ever follows.
+    """
+    start = time.monotonic()
+    response = await call_next(request)
+    elapsed_ms = (time.monotonic() - start) * 1000
+    logger.info(f"{request.method} {request.url.path} completed in {elapsed_ms:.0f}ms")
+    return response
 
 
 class SkillRow(BaseModel):
