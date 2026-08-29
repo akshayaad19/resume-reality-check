@@ -106,5 +106,50 @@
     "agree": true,
     "correct_claimed_on_resume": true,
     "reasoning": "Score is reasonable. claimed_on_resume showed 'No' but should be 'Yes' - resume lists Claude API, GPT-4 Vision, OpenAI API, and Azure OpenAI in the skills section."
+  },
+  {
+    "skill": "Data structures and algorithms",
+    "evidence_shown": "Shipped a support-diagnostics rules engine classifying 39 transaction statuses into 12 lifecycle stages across 4 severity tiers with a 30-minute stall threshold",
+    "system_score": 2,
+    "my_score": 3,
+    "agree": false,
+    "correct_claimed_on_resume": true,
+    "reasoning": "Tested against Ritesh Pandey's resume (test_resume_3.txt). System scored 2/3, citing an unrelated transaction-status rules engine bullet. This misses much stronger evidence: the resume's Achievements section lists specific competitive programming rankings - LeetCode Knight (max rating 1917, 950+ problems), Codeforces Specialist (max rating 1530, 800+ problems), and CodeChef 4-star (max rating 1851, 250+ problems) - each with specific contest placements (e.g. rank 881/31,923 in LeetCode Biweekly Contest 161). Sustained, quantified competitive-programming performance at these ratings is strong, verifiable evidence of DS&A mastery and should score 3/3, citing the competitive programming record rather than the unrelated bullet."
+  },
+  {
+    "skill": "Cloud platforms",
+    "evidence_shown": "NeonDB serverless Postgres database and Vercel frontend deployment hosting, cited as cloud-platform evidence",
+    "system_score": 2,
+    "my_score": 1,
+    "agree": false,
+    "correct_claimed_on_resume": false,
+    "reasoning": "Tested against Ritesh Pandey's resume (test_resume_3.txt). System scored 2/3, citing NeonDB (a serverless Postgres database-as-a-service) and Vercel (frontend hosting/deployment). Neither is a general-purpose cloud infrastructure platform in the sense JDs usually mean (AWS/GCP/Azure) - they are narrow, single-purpose managed services one layer removed from actual cloud infrastructure work. This is weak, tangential evidence at best and should score 0-1, not 2."
+  },
+  {
+    "skill": "Workflow automation",
+    "evidence_shown": "Engineered idempotent, HMAC-verified webhook pipelines using Memcached-backed event deduplication and FIFO matching, eliminating double-credited transactions under at-least-once delivery guarantees",
+    "system_score": 3,
+    "my_score": 1,
+    "agree": false,
+    "correct_claimed_on_resume": false,
+    "reasoning": "Tested against Ritesh Pandey's resume (test_resume_3.txt). System scored 3/3, reusing the exact same citation already used for 'Scalable system design' (the webhook deduplication pipeline). Webhook deduplication genuinely demonstrates scalable system design, but calling it 'workflow automation' is a stretch - it's event-processing reliability engineering, not business-process/task automation. The same chunk is being credited toward two distinct skills because they are semantically close in embedding space, not because the evidence genuinely supports both distinctly. Should score low (1, mentioned/tangential) rather than 3 (deep expertise)."
+  },
+  {
+    "skill": "Data structures and algorithms",
+    "evidence_shown": "Optimized database queries, multithreading, and UI rendering to improve system scalability and responsiveness",
+    "system_score": 2,
+    "my_score": 1,
+    "agree": false,
+    "correct_claimed_on_resume": false,
+    "reasoning": "Tested against Gurumita Naidu's resume (test_resume_2.txt) against the same Margn JD. System scored 2/3, citing a database-query/UI performance-optimization bullet. This is systems/performance engineering, not really 'data structures and algorithms' in the sense of algorithmic thinking, complexity analysis, or choosing/implementing specific data structures - no bullet describes actual algorithm design or data-structure selection. Should score lower (0-1), not 2."
+  },
+  {
+    "skill": "Scalable system design",
+    "evidence_shown": "Optimized database queries, multithreading, and UI rendering to improve system scalability and responsiveness",
+    "system_score": 2,
+    "my_score": 2,
+    "agree": true,
+    "correct_claimed_on_resume": false,
+    "reasoning": "Tested against Gurumita Naidu's resume (test_resume_2.txt) against the same Margn JD. System scored 2/3, reusing the exact same citation already used for 'Data structures and algorithms' above. This bullet is more legitimately 'scalable system design' than DS&A, so the score itself is reasonable - but citing the identical bullet for two conceptually distinct (though related) skills indicates retrieval/judging isn't distinguishing between them well; the same evidence is being double-counted across skills rather than each drawing on genuinely skill-specific support."
   }
 ]

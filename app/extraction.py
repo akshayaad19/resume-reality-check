@@ -83,6 +83,18 @@ falls under that project header, until the next project or section header. Do no
 add this tag to bullets outside a project section (e.g. general work-experience \
 bullets that aren't under a project header) - copy those verbatim with no prefix.
 
+For bullets under an ACHIEVEMENT header (a header line naming a platform or \
+competition context plus credentials, commonly in a format like \
+"<Platform> | <Rank/Title> (<Rating detail>) | <problem/activity count> | \
+<handle>"), prepend that header's platform and credential details to the bullet \
+text before adding it to "evidence", as "[<Platform>, <Rank/Title>, <rating and/or \
+count details>] <verbatim bullet text>". Take the details straight from that \
+header line, and apply them to every bullet that falls under that header, until \
+the next header. Do not add this tag to bullets outside an achievement section. \
+This preserves quantified, verifiable signals (e.g. a contest rating or problem \
+count) that would otherwise be lost, since these header lines are not bullet \
+points themselves and would not otherwise be captured as evidence at all.
+
 Also add "claims" derived from the EDUCATION section: for each degree, include \
 the field of study itself (e.g. "Information Technology") plus the closely \
 related domain terms it commonly implies (e.g. a degree in "Information \

@@ -131,12 +131,34 @@ with no package name in it relevant to the skill being scored - is NOT \
 evidence for that skill, and must not be used to justify a score above what \
 the skill's own remaining evidence would earn on its own.
 
+Cross-skill citation-reuse rule: you are scoring several distinct skills in this \
+same call, each with its own retrieved evidence chunks, and the same chunk can \
+appear in more than one skill's list. Before finalizing a score, check whether \
+your intended citation is a generic, broadly-technical chunk that does not \
+specifically name or describe the skill's actual concept (as opposed to a chunk \
+that concretely demonstrates that exact skill) - e.g. a general "optimized \
+database queries and system performance" bullet is generic systems-engineering \
+language, not specific evidence of "data structures and algorithms" or \
+"workflow automation" unless it actually describes algorithm design, a specific \
+data structure, or an automated workflow. If that same generic chunk is also \
+your best available citation for a different, conceptually distinct skill \
+elsewhere in this batch, do not let it justify a score above "Superficial" (1) \
+for every skill it loosely touches - reserve "Applied" (2) or "Deep expertise" \
+(3) for whichever skill(s) that chunk most directly and specifically \
+demonstrates, and score the others based on how weak/generic the remaining \
+connection actually is. A chunk shared across many skills' top citations is a \
+signal it is being over-credited, not that the candidate has deep evidence in \
+all of them.
+
 In the justification, state explicitly which case applies, e.g. "Structural \
 signal found (Dockerfile) in repo X's file listing, no descriptive text - scored \
 2 based on verified artifact alone", "Structural signal (CI workflow) AND \
-descriptive README text both confirm this skill - scored 3", or "Verified \
+descriptive README text both confirm this skill - scored 3", "Verified \
 dependency 'sentence-transformers' in repo X's requirements.txt confirms this \
-skill - scored 2 based on the verified package alone."
+skill - scored 2 based on the verified package alone", or "This chunk describes \
+generic system-performance optimization; it more specifically demonstrates \
+'Scalable system design' than 'Data structures and algorithms', which needs \
+actual algorithmic/data-structure work - capped at 1 here."
 """
 
 SKILL_BLOCK_TEMPLATE = """\
