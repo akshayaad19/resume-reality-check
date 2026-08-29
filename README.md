@@ -29,76 +29,9 @@ The claims-vs-evidence separation is enforced architecturally: the retrieval ind
 
 ## Architecture
 
-```
-Resume (PDF/text) ──┐
-                     ├─→ Parsing (pypdf) → clean text
-Job Description ─────┘
-                            │
-                            ▼
-              Extraction (Gemini, temperature=0)
-         ┌──────────────────┴──────────────────┐
-         ▼                                      ▼
-  Resume: claims + evidence            JD: required + preferred skills
-  (achievements/certifications                  │
-   captured as evidence too — finding #12)       │
-         │                                      │
-         ▼                                      │
-  EvidenceIndex (built once per request)        │
-    - BM25 keyword index                        │
-    - ONNX Runtime embeddings                   │
-    (all-MiniLM-L6-v2, local, no API cost,      │
-     no PyTorch — finding #9)                    │
-         │                                      │
-  GitHub evidence (optional, if username given) │
-    - own separate EvidenceIndex (BM25 +        │
-      embeddings), so its corpus statistics     │
-      never mix with the resume's (finding #7)  │
-    - README prose (searched like any bullet)   │
-      + verified structural signals (Dockerfile,│
-      k8s/, CI, real dependency names parsed     │
-      from requirements.txt — finding #8),      │
-      structural signals rubric-weighted higher │
-      than prose since they're checkable         │
-      artifacts, not claims                      │
-         │                                      │
-         └──────────────◄───────────────────────┘
-                for each JD skill:
-                hybrid search (BM25 + semantic) on
-                resume index AND GitHub index,
-                merged only after each completes
-                → RRF fusion → top-k chunks
-                → minimum relevance threshold
-                            │
-              ┌─────────────┴─────────────┐
-              ▼ above threshold            ▼ below threshold
-        proceed as-is             self-healing retrieval (finding #10):
-              │                   reformulate the query, retry search,
-              │                   pass reformulated top-5 candidates to
-              │                   the judge UNFILTERED (no second numeric
-              │                   gate — a threshold couldn't reliably
-              │                   separate real recoveries from noise,
-              │                   so the judge decides instead)
-              │                             │
-              └─────────────┬───────────────┘
-                            ▼
-              Batched LLM judge (Gemini, temperature=0)
-              scores each skill 0-3 vs. a fixed rubric,
-              cites the chunk that justified the score.
-              Rubric penalizes generic, non-skill-specific
-              citations shared across multiple skills
-              (finding #11)
-                            │
-                            ▼
-              claimed_on_resume: fuzzy semantic match
-              (embedding similarity, threshold 0.50)
-              against the claims list — independent of
-              the score, used only for display
-                            │
-                            ▼
-                    Per-skill output table
-```
+![Architecture diagram](architecture.svg)
 
-**Tech stack:** FastAPI · Gemini (gemini-3.6-flash) · ONNX Runtime (embeddings) · rank-bm25 · Pydantic structured outputs · Docker · deployed on Railway
+**Tech stack:** FastAPI · Gemini (gemini-3.6-flash) · ONNX Runtime + all-MiniLM-L6-v2 (local embeddings, no PyTorch) · rank-bm25 (BM25) · Reciprocal Rank Fusion · self-healing/query-reformulation retrieval · GitHub REST API (structural + prose evidence) · Pydantic structured outputs · Docker · deployed on Railway
 
 ---
 
