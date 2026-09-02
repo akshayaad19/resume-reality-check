@@ -1,3 +1,14 @@
+FROM node:20-slim AS frontend-build
+
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm install
+COPY frontend/ ./
+# Vite's outDir (frontend/vite.config.ts) writes straight to ../app/static,
+# so this lands at /app/static relative to this stage's WORKDIR.
+RUN npm run build
+
+
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -32,6 +43,7 @@ for name, url in files.items():
 PYEOF
 
 COPY app ./app
+COPY --from=frontend-build /app/static ./app/static
 
 EXPOSE 8000
 

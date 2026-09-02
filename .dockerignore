@@ -10,3 +10,6 @@ test_jd.txt
 analyze_output.txt
 debugging-log.md
 README.md
+frontend/node_modules
+frontend/dist
+app/static

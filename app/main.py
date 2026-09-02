@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app import extraction, github_evidence, judge, parsing
@@ -20,6 +22,31 @@ app = FastAPI(title="Resume Reality Check")
 logger = logging.getLogger("uvicorn.error")
 
 TOP_K_CHUNKS = 5
+
+
+@app.exception_handler(judge.DailyQuotaExhaustedError)
+async def handle_daily_quota_exhausted(
+    request: Request, exc: judge.DailyQuotaExhaustedError
+) -> JSONResponse:
+    """Turns the backend's fail-fast daily-quota error into a clean response.
+
+    Without this, it surfaces to callers as an unhandled 500 with a raw
+    traceback message - this gives the frontend (and `/docs` users) a
+    specific, actionable detail and status code (503: temporarily
+    unavailable, not the caller's fault) instead.
+    """
+    logger.warning(f"{request.method} {request.url.path} - Gemini daily quota exhausted")
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": (
+                "The Gemini API's free-tier daily quota has been used up for this "
+                "API key's project. This resets roughly at midnight Pacific Time - "
+                "try again later, or use an API key from a different Google Cloud "
+                "project/account."
+            )
+        },
+    )
 
 
 @app.middleware("http")
@@ -155,3 +182,8 @@ async def analyze(
         )
 
     return run_analysis(resume_text, job_description, github_username=github_username)
+
+
+# Mounted last so it never shadows the API routes above; serves the frontend
+# (recruiter/candidate views) at "/" (index.html, styles.css, app.js).
+app.mount("/", StaticFiles(directory="app/static", html=True), name="static")
