@@ -6,7 +6,7 @@ Most resume-matching tools compare keywords. This one separates what a candidate
 
 On my own resume, this system found that I claimed "Python" in my skills section, but **zero** of my evidence bullets described using it — because the language was only ever named in a project's tech-stack tag line, never in the bullet text itself. That single finding kicked off thirteen real debugging investigations, documented below — spanning retrieval precision, LLM infrastructure quirks, production deployment, and generalization across three different resumes.
 
-**Live demo:** [resume-reality-check-production.up.railway.app/docs](https://resume-reality-check-production.up.railway.app/docs) — first response can take up to ~2 minutes (multiple sequential LLM calls; see finding #9 for why this is deployed on Railway rather than Render).
+**Live demo:** [resume-reality-check-production.up.railway.app](https://resume-reality-check-production.up.railway.app/) — first response can take up to ~2 minutes (multiple sequential LLM calls; see finding #9 for why this is deployed on Railway rather than Render).
 
 ---
 
@@ -154,7 +154,7 @@ Beyond the two fixes above, testing on these two additional resumes surfaced fur
 
 ## Try it
 
-**Live:** [resume-reality-check-production.up.railway.app/docs](https://resume-reality-check-production.up.railway.app/docs) — upload a resume, paste a job description, optionally add a GitHub username. First response takes up to ~2 minutes (several sequential LLM calls, no caching between requests yet).
+**Live:** [resume-reality-check-production.up.railway.app](https://resume-reality-check-production.up.railway.app/) — upload a resume, paste a job description, optionally add a GitHub username. First response takes up to ~2 minutes (several sequential LLM calls, no caching between requests yet).
 
 **Locally:**
 ```bash
